@@ -1,0 +1,35 @@
+;---------------------------------------------------------------------
+;- FILE:              p1.arm
+;- DESCRIPTION:       
+;- DATE:              04/04/2001
+;- PROJECT:           
+;- LANGUAGE PLATFORM: HARM (was VARM (Virtual ARM)), for CSE240 Spring 2001
+;- OS PLATFORM:       RedHat Linux 6.2
+;- AUTHOR:            Jeffrey A. Meunier
+;- EMAIL:             jeffm@cse.uconn.edu
+;---------------------------------------------------------------------
+
+            origin 0
+            reg r0 = MSG
+	    reg r10 = BUFFER
+	    reg r11 = HELLO
+
+            swi #2
+	    mov r0, r10
+	    mov r1, #32
+            swi #4
+	    mov r0, r11
+	    swi #2
+	    mov r0, r10
+	    swi #2
+	    swi #10
+	
+            swi #11
+
+MSG       = "Enter your name: "
+HELLO     = "Hello, "
+BUFFER    = array 32 0
+
+;---------------------------------------------------------------------
+;- eof
+;---------------------------------------------------------------------
