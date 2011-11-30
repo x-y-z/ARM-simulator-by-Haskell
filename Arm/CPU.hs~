@@ -1,0 +1,20 @@
+module Arm.CPU
+where
+  
+import Arm.Memory
+import Arm.Register
+
+data CPU
+  = CPU
+      { memory    :: Memory,
+        registers :: Register
+      }
+
+emptyCPU :: Address -> IO CPU
+emptyCPU memSize
+  = do mem  <- emptyMem memSize
+       regs <- emptyRegs
+       return CPU
+                { memory    = mem
+                , registers = regs
+                }
