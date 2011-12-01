@@ -9,24 +9,26 @@
 ;- EMAIL:             jeffm@cse.uconn.edu
 ;---------------------------------------------------------------------
 
+            origin 0
+            reg r0 = MSG
+	    reg r10 = BUFFER
+	    reg r11 = HELLO
 
-            origin 16
-            reg r0 = DATA1
+            swi #2
+	    mov r0, r10
+	    mov r1, #32
+            swi #4
+	    mov r0, r11
+	    swi #2
+	    mov r0, r10
+	    swi #2
+	    swi #10
+	
+            swi #11
 
-TOP:        mov r1, #100		; this is the top of the loop
-LOOP:       add r1, r1, #4
-            cmp r1, #200
-            ;add r1, r1, #4
-            bne LOOP
-
-DATA1     = 0,1,2
-            3,4,5
-
-DATA2     = 100
-
-MSG1      = "Hello, World!"
-
-
+MSG       = "Enter your name: "
+HELLO     = "Hello, "
+BUFFER    = array 32 0
 
 ;---------------------------------------------------------------------
 ;- eof

@@ -10,8 +10,6 @@
 -- EMAIL:             axman6@gmail.com
 ----------------------------------------------------------------------
 
-
-
 module Decoder
   ( decode )
 where
@@ -82,18 +80,6 @@ decodeBranch word
         offset' = if offset > 32767
                     then offset - 65536
                     else offset
-             -- if  offset > 8388607 -- this is 2^23 - 1
-             --        then offset - 16777216 -- this is  2^24
-             --        else offset
-            
-            
-            
-            
-            -- if offset > 32767
-            --         then offset - 65536
-            --         else offset
-            
-            
             
         cond = splitWord word (31, 28)
     in case link of

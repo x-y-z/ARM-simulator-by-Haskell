@@ -292,7 +292,7 @@ eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
 
 -- software interrupt
 eval (Swi (Con isn))
-  = undefined
+  = return ()
   --do dbg <- readIORef (debug cpu)
     --   swi cpu isn dbg
 
@@ -301,29 +301,34 @@ eval (Swi (Con isn))
 ----------------------------------------------------------------------
 -- Run a CPU until its running flag is set to False.
 ----------------------------------------------------------------------
-run' :: State CPU ()
-
-run' = do singleStep
-          run'
+{-
+runStep :: State CPU ()
+runStep = do singleStep
+             cyc <- currentCycle
+             r   <- isRunning
+             if r || cyc > 1000 then return () else runStep
 
 singleStep :: State CPU ()
-singleStep
-  = do pc <- getReg R15
-       opcode <- readMem pc
-       let instr = decode opcode
-       case instr of
-         Nothing
-           -> do fail ("ERROR: can't decode instruction " ++ (formatHex 8 '0' "" opcode)
-                           ++ " at adddress " ++ show pc ++ " (dec)")
-         Just instr'
-           -> do setReg R15 (pc + 4)
-                 eval instr'
+singleStep = do pc <- getReg R15
+                opcode <- readMem pc
+                if opcode == 0 then stopRunning
+                  else case (decode opcode) of
+                  Nothing -> fail ("ERROR: can't decode " ++ 
+                                     "instruction " ++ 
+                                     (formatHex 8 '0' "" opcode) ++ 
+                                     " at adddress " ++ 
+                                     show pc ++ " (dec)")
+                  Just instr' -> do setReg R15 (pc + 4)
+                                    nextCycle
+                                    eval instr'
 
 
 runProgram :: Program -> CPU
-runProgram program = execState run' (
-  execState (loadProgram program) (CPU emptyMem emptyRegs))
+runProgram program = execState runStep
+                     (execState startRunning 
+                     (execState (loadProgram program) 
+                      (CPU emptyMem emptyRegs emptyCounters emptyAux)))
 
 run :: Program -> IO ()
 run program
-  = do putStrLn $ show $ runProgram program
+  = do putStrLn $ show $ runProgram program -}

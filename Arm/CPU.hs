@@ -8,16 +8,66 @@ import Data.Word
 
 import Control.Monad.State
 
+import Instruction
 import RegisterName  
 
-data CPU = CPU Memory Registers
+data CPU = CPU Memory Registers Counters Auxilary
   deriving Show
 
 getMem :: CPU -> Memory
-getMem (CPU memory _) = memory
+getMem (CPU memory _ _ _) = memory
 
 getRegs :: CPU -> Registers
-getRegs (CPU _ regs) = regs
+getRegs (CPU _ regs _ _) = regs
+
+getCounters :: CPU -> Counters
+getCounters (CPU _ _ counts _) = counts
+
+getAuxilary :: CPU -> Auxilary
+getAuxilary (CPU _ _ _ aux) = aux
+
+setAuxilary :: Auxilary -> State CPU ()
+setAuxilary aux = do (CPU m rs cs _) <- get
+                     put $ CPU m rs cs aux
+
+emptyAux :: Auxilary
+emptyAux = InO [] []
+
+data Auxilary = 
+    Nil
+  | InO {fd :: [Word32], de :: [Instruction]}
+  deriving Show
+
+type Counters = Map String Integer
+
+emptyCounters :: Counters
+emptyCounters = Map.insert "Cycles" 0 Map.empty
+
+-- Return 0 when counter name doesn't exist
+getCounter :: String -> State CPU Integer
+getCounter id = do (CPU _ _ cs _) <- get
+                   if Map.member id cs then return $ cs Map.! id else return 0
+
+setCounter :: String -> Integer -> State CPU ()
+setCounter id cnt = do (CPU m rs cs aux) <- get
+                       put $ CPU m rs (Map.insert id cnt cs) aux
+
+currentCycle :: State CPU Integer
+currentCycle = getCounter "Cycles"
+
+nextCycle :: State CPU ()
+nextCycle = do cyc <- getCounter "Cycles"
+               setCounter "Cycles" (cyc + 1)
+
+startRunning :: State CPU ()
+startRunning = setCounter "Running" 1
+
+stopRunning :: State CPU ()
+stopRunning = setCounter "Running" 0
+
+isRunning :: State CPU Bool
+isRunning = do r <- getCounter "Running"
+               return $ r == 0
 
 -----------------------------------------------
 -- Register Functions
@@ -52,15 +102,15 @@ emptyRegs = Map.fromList[
 -- Get the value in a register.
 ----------------------------------------------------------------------
 getReg :: RegisterName -> State CPU Word32
-getReg id = do (CPU _ rs) <- get
+getReg id = do (CPU _ rs _ _) <- get
                return $ rs Map.! id
 
 ----------------------------------------------------------------------
 -- Set a register with a new value.
 ----------------------------------------------------------------------
 setReg :: RegisterName -> Word32 -> State CPU ()
-setReg id val = do (CPU mem rs) <- get
-                   put (CPU mem (Map.insert id val rs))
+setReg id val = do (CPU mem rs cs aux) <- get
+                   put $ CPU mem (Map.insert id val rs) cs aux
 
 cpsrGetN :: State CPU Word32
 cpsrGetN = cpsrGet 31
@@ -114,13 +164,13 @@ wordAddress :: ByteAddress -> WordAddress
 wordAddress addr = addr `div` 4
 
 getMemWord :: WordAddress -> State CPU Word32
-getMemWord addr = do (CPU m _) <- get
+getMemWord addr = do (CPU m _ _ _) <- get
                      if Map.member addr m 
                        then return (m Map.! addr) else return 0
 
 setMemWord :: WordAddress -> Word32 -> State CPU ()
-setMemWord addr val = do (CPU m rs) <- get
-                         put $ (CPU (Map.insert addr val m) rs)
+setMemWord addr val = do (CPU m rs cs aux) <- get
+                         put $ (CPU (Map.insert addr val m) rs cs aux)
 
 readMem :: Address -> State CPU Word32
 readMem byteAddr = getMemWord (wordAddress byteAddr)

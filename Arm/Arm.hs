@@ -2,7 +2,7 @@ module Arm
 where
 
 import Assembler
-import qualified ExecutionUnit
+import qualified Main
 import Loader
 import Program
 
@@ -11,6 +11,6 @@ run fileName
   = do progOrError <- asmFile fileName
        case progOrError of
          Left prog
-           -> ExecutionUnit.run prog
+           -> Main.run prog
          Right err
            -> putStrLn err
