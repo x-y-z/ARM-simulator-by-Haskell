@@ -11,7 +11,8 @@ import Control.Monad.State
 import RegisterName  
 
 data CPU = CPU Memory Registers
-                
+  deriving Show
+
 getMem :: CPU -> Memory
 getMem (CPU memory _) = memory
 

@@ -12,7 +12,7 @@
 
 
 
-module Arm.Decoder
+module Decoder
   ( decode )
 where
 
@@ -28,9 +28,9 @@ import Data.Word
 ----------------------------------------------------------------------
 -- Local libraries.
 ----------------------------------------------------------------------
-import Arm.Instruction
-import Arm.Operand
-import Arm.RegisterName
+import Instruction
+import Operand
+import RegisterName
 
 ----------------------------------------------------------------------
 -- Decode a word into an instruction.

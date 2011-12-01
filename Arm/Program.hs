@@ -4,7 +4,7 @@ where
 import Data.Word
 
 import Instruction
-import Memory
+import CPU
 import RegisterName
 
 data Constant
