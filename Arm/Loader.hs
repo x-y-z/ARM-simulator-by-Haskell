@@ -1,3 +1,5 @@
+{-#OPTIONS  -XFlexibleContexts #-}
+
 module Loader
 where
   
@@ -17,7 +19,7 @@ import RegisterName
 ----------------------------------------------------------------------
 -- Load a program into a CPU.
 ----------------------------------------------------------------------
-loadProgram :: Program -> State CPU ()
+loadProgram :: (MonadState CPU m, MonadIO m) => Program -> m ()
 loadProgram program = let org    = origin program
                           instrs = instructions program
                           consts = constants program
@@ -30,7 +32,7 @@ loadProgram program = let org    = origin program
 ----------------------------------------------------------------------
 -- Load register pre-load values.
 ----------------------------------------------------------------------
-loadRegisters :: [(RegisterName, Word32)] -> State CPU ()
+loadRegisters :: (MonadState CPU m, MonadIO m) => [(RegisterName, Word32)] -> m ()
 loadRegisters [] = return ()
 loadRegisters ((regName, val) : rest) = do setReg regName val
                                            loadRegisters rest
@@ -38,7 +40,7 @@ loadRegisters ((regName, val) : rest) = do setReg regName val
 ----------------------------------------------------------------------
 -- Load a list of instructions into memory.
 ----------------------------------------------------------------------
-loadInstructions :: Address -> [Instruction] -> State CPU ()
+loadInstructions :: (MonadState CPU m, MonadIO m) => Address -> [Instruction] -> m ()
 loadInstructions _ [] = return ()
 loadInstructions addr (ins : inss)
   = do let opcode = encode ins
@@ -50,7 +52,7 @@ loadInstructions addr (ins : inss)
 ----------------------------------------------------------------------
 -- Load a list of constant tuples into memory.
 ----------------------------------------------------------------------
-loadConstants :: [(Address, Constant)] -> State CPU ()
+loadConstants :: (MonadState CPU m, MonadIO m) => [(Address, Constant)] -> m ()
 loadConstants [] = return ()
 
 loadConstants ((addr, const) : consts)
@@ -62,7 +64,7 @@ loadConstants ((addr, const) : consts)
 ----------------------------------------------------------------------
 -- Load an arbitrary constant into memory.
 ----------------------------------------------------------------------
-loadConstant :: Address -> Constant -> State CPU ()
+loadConstant :: (MonadState CPU m, MonadIO m) => Address -> Constant -> m ()
 
 loadConstant addr (Array count value)
   = loadArray addr count value
@@ -84,7 +86,7 @@ loadConstant addr (Word w)
 ----------------------------------------------------------------------
 -- Load an array of constants into memory.
 ----------------------------------------------------------------------
-loadArray :: Address -> Word32 -> Constant -> State CPU ()
+loadArray :: (MonadState CPU m, MonadIO m) => Address -> Word32 -> Constant -> m ()
 loadArray addr 0 const
   = return ()
 
@@ -97,7 +99,7 @@ loadArray addr count const
 ----------------------------------------------------------------------
 -- Load a list of constants into memory.
 ----------------------------------------------------------------------
-loadList :: Address -> [Constant] -> State CPU ()
+loadList :: (MonadState CPU m, MonadIO m) => Address -> [Constant] -> m ()
 loadList addr []
   = return ()
 
@@ -111,7 +113,7 @@ loadList addr (const : consts)
 ----------------------------------------------------------------------
 -- Load a string into memory; null terminate the string.
 ----------------------------------------------------------------------
-loadString :: Address -> String -> State CPU ()
+loadString :: (MonadState CPU m, MonadIO m) => Address -> String -> m ()
 loadString addr [] = return ()
 loadString addr [c1] = let w = fromIntegral (ord c1) in writeMem addr w
 

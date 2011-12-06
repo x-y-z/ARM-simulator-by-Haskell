@@ -1,3 +1,4 @@
+{-#OPTIONS  -XFlexibleContexts #-}
 module ExecutionUnit
 where
   
@@ -20,7 +21,7 @@ import RegisterName
 ----------------------------------------------------------------------
 -- Evaluate a single instruction.
 ----------------------------------------------------------------------
-eval :: Instruction -> State CPU ()
+eval :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
 
 -- add two registers
 eval (Add (Reg reg1) (Reg reg2) (Reg reg3))
@@ -301,12 +302,12 @@ eval (Swi (Con isn))
 ----------------------------------------------------------------------
 -- Run a CPU until its running flag is set to False.
 ----------------------------------------------------------------------
-run' :: State CPU ()
+run' :: (MonadState CPU m, MonadIO m) => m ()
 
 run' = do singleStep
           run'
 
-singleStep :: State CPU ()
+singleStep :: (MonadState CPU m, MonadIO m) => m ()
 singleStep
   = do pc <- getReg R15
        opcode <- readMem pc
@@ -320,10 +321,12 @@ singleStep
                  eval instr'
 
 
-runProgram :: Program -> CPU
-runProgram program = execState run' (
-  execState (loadProgram program) (CPU emptyMem emptyRegs))
+runProgram :: MonadIO m => Program -> m CPU
+runProgram program = do cpu <- (execStateT (loadProgram program) (CPU emptyMem emptyRegs)) 
+                        cpu' <- execStateT run' cpu
+                        return cpu'
 
 run :: Program -> IO ()
 run program
-  = do putStrLn $ show $ runProgram program
+  = do cpu <- runProgram program
+       putStr $ show cpu
