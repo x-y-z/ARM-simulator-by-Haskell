@@ -17,6 +17,7 @@ import Loader
 import Operand
 import Program
 import RegisterName
+import Swi
 
 ----------------------------------------------------------------------
 -- Evaluate a single instruction.
@@ -293,9 +294,8 @@ eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
 
 -- software interrupt
 eval (Swi (Con isn))
-  = undefined
-  --do dbg <- readIORef (debug cpu)
-    --   swi cpu isn dbg
+  -- do dbg <- readIORef (debug cpu)
+   = swi isn False
 
 
 
@@ -321,10 +321,11 @@ singleStep
                  eval instr'
 
 
-runProgram :: MonadIO m => Program -> m CPU
-runProgram program = do cpu <- (execStateT (loadProgram program) (CPU emptyMem emptyRegs)) 
-                        cpu' <- execStateT run' cpu
-                        return cpu'
+runProgram :: Program -> IO CPU
+runProgram program = do cpu <- (execStateT (loadProgram program) 
+                                           (CPU emptyMem emptyRegs)) 
+                        execStateT run' cpu
+                    
 
 run :: Program -> IO ()
 run program
