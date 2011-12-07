@@ -23,8 +23,7 @@
 	    mov r0, r10
 	    swi #2
 	    swi #10
-	
-            swi #11
+        swi #11
 
 MSG       = "Enter your name: "
 HELLO     = "Hello, "

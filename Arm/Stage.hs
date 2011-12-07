@@ -1,3 +1,4 @@
+{-#OPTIONS -XRankNTypes -XFlexibleContexts -XImpredicativeTypes#-}
 module Stage
 where       
   
@@ -13,12 +14,12 @@ import RegisterName
 
 type Pipeline = [Stage]
 
-type Stage = State CPU ()
+type Stage = (MonadState CPU m, MonadIO m) => m ()
 
 inOrder :: Pipeline
 inOrder = [fetch,decode,execute]
 
-setFD :: Word32 -> State CPU ()
+setFD :: (MonadState CPU m, MonadIO m) => Word32 -> m ()
 setFD i = do (CPU _ _ _ a) <- get
              case a of
                   Nil -> fail "Need In-Order auxilary data"
@@ -31,7 +32,7 @@ fetch = do pc <- getReg R15
              else do setFD opcode
                      setReg R15 (pc + 4)
 
-getFD :: State CPU Word32
+getFD :: (MonadState CPU m, MonadIO m) => m Word32
 getFD = do (CPU _ _ _ a) <- get
            case a of
              Nil -> fail "Need In-Order auxilary data"
@@ -40,13 +41,13 @@ getFD = do (CPU _ _ _ a) <- get
                (x : xs) -> do setAuxilary (InO xs de)
                               return x
 
-setDE :: Instruction -> State CPU ()
+setDE :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
 setDE i = do (CPU _ _ _ a) <- get
              case a of
                Nil -> fail "Need In-Order auxilary data"
                (InO fd de) -> setAuxilary (InO fd (i : de))
 
-getDE :: State CPU Instruction
+getDE :: (MonadState CPU m, MonadIO m) => m Instruction
 getDE = do (CPU _ _ _ a) <- get
            case a of
              Nil -> fail "Need In-Order auxilary data"

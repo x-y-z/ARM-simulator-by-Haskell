@@ -1,3 +1,4 @@
+{-#OPTIONS  -XFlexibleContexts #-}
 module Swi
 where
 
@@ -5,6 +6,8 @@ import Data.Bits
 import Data.Char
 import Data.IORef
 import Data.Word
+
+import Control.Monad.State
 
 import CPU
 import Loader
@@ -15,104 +18,96 @@ line = "----------------------------------------"
 ----------------------------------------------------------------------
 -- Software interrupt services.
 ----------------------------------------------------------------------
-swi :: Word32 -> Bool -> State CPU ()
+swi :: (MonadState CPU m, MonadIO m) => Word32 -> Bool -> m ()
 
 -- display character in R0
 swi 0 debug
-  = do (CPU _ regs) <- get
-       r0 <- getReg regs R0
+  = do r0 <- getReg R0
        let c = fromIntegral r0
        if debug
-         then do putStrLn line
-                 putStrLn ("CHR: [" ++ [chr c] ++ "]")
-                 putStrLn line
-         else putStr [chr c]
+         then do liftIO $ putStrLn line
+                 liftIO $ putStrLn ("CHR: [" ++ [chr c] ++ "]")
+                 liftIO $ putStrLn line
+         else liftIO $ putStr [chr c]
 
 -- display integer in R0
 swi 1 debug
-  = do (CPU _ regs) <- get
-       r0 <- getReg regs R0
+  = do r0 <- getReg R0
        let r0i = fromIntegral r0
        if debug
-         then do putStrLn line
-                 putStrLn ("INT: [" ++ show r0i ++ "]")
-                 putStrLn line
-         else putStr (show r0i)
+         then do liftIO $ putStrLn line
+                 liftIO $ putStrLn ("INT: [" ++ show r0i ++ "]")
+                 liftIO $ putStrLn line
+         else liftIO $ putStr (show r0i)
 
 -- display string starting in location contained in R0
 swi 2 debug
-  = do (CPU _ regs) <- get
-       r0 <- getReg regs R0
-       str <- fetchString (memory cpu) r0
+  = do r0 <- getReg R0
+       str <- fetchString r0
        if debug
-         then do putStrLn line
-                 putStrLn ("STR: [" ++ str ++ "]")
-                 putStrLn line
-         else putStr str
+         then do liftIO $ putStrLn line
+                 liftIO $ putStrLn ("STR: [" ++ str ++ "]")
+                 liftIO $ putStrLn line
+         else liftIO $ putStr str
 
 -- read a number from the keyboard, place in R0
 swi 3 debug
   = do if debug
-         then do putStrLn line
-                 putStr "INPUT INT: "
+         then do liftIO $ putStrLn line
+                 liftIO $ putStr "INPUT INT: "
          else return ()
-       i <- readLn
+       i <- liftIO $ readLn
        if debug
-         then putStrLn line
+         then liftIO $ putStrLn line
          else return ()
        let w = fromIntegral i
-       let regs = registers cpu
-       setReg regs R0 w
+       setReg R0 w
 
 -- read a string from the keyboard, place in buffer that
 -- r0 points to, with maximum length in r1 (this service
 -- will not store more than r1 - 1 characters in the
 -- buffer, the string will automatically be null-terminated)
-swi cpu 4 debug
+swi 4 debug
   = do if debug
-         then do putStrLn line
-                 putStr "INPUT STRING: "
+         then do liftIO $ putStrLn line
+                 liftIO $ putStr "INPUT STRING: "
          else return ()
-       s <- getLine
+       s <- liftIO $ getLine
        if debug
-         then putStrLn s
+         then liftIO $ putStrLn s
          else return ()
-       let regs = registers cpu
-       addr <- getReg regs R0
-       r1 <- getReg regs R1
+       addr <- getReg R0
+       r1 <- getReg R1
        let len = fromIntegral r1
        let s' = take (len - 1) s
-       let mem = memory cpu
-       loadString mem addr (s' ++ ['\NUL'])
+       loadString addr (s' ++ ['\NUL'])
 
 -- display newline
-swi cpu 10 debug
+swi 10 debug
   = do if debug
-         then do putStrLn line
-                 putStrLn "NEWLINE"
-                 putStrLn line
-         else putStrLn ""
+         then do liftIO $ putStrLn line
+                 liftIO $ putStrLn "NEWLINE"
+                 liftIO $ putStrLn line
+         else liftIO $ putStrLn ""
 
 -- exit
-swi cpu 11 debug
+swi 11 debug
   = do if debug
-         then do putStrLn line
-                 putStrLn "NORMAL EXIT"
-                 putStrLn line
+         then do liftIO $ putStrLn line
+                 liftIO $ putStrLn "NORMAL EXIT"
+                 liftIO $ putStrLn line
          else return ()
+       stopRunning
 
-swi cpu a debug = error $ "unknown SWI: " ++ show a ++ " " ++ show debug
+swi a debug = error $ "unknown SWI: " ++ show a ++ " " ++ show debug
 
 ----------------------------------------------------------------------
 -- Fetch a string from memory.
 ----------------------------------------------------------------------
-fetchString
-  :: Memory
-  -> Address
-  -> IO String
+fetchString :: (MonadState CPU m, MonadIO m) => Address -> m String
 
-fetchString mem addr
-  = do word <- readMem mem addr
+fetchString addr
+  = do word <- readMem addr
        let c4 = fromIntegral ((word .&. 0xFF000000) `shift` (-24))
        let c3 = fromIntegral ((word .&. 0xFF0000) `shift` (-16))
        let c2 = fromIntegral ((word .&. 0xFF00) `shift` (-8))
@@ -125,5 +120,5 @@ fetchString mem addr
                        then return [chr c1, chr c2]
                        else if c4 == 0
                               then return [chr c1, chr c2, chr c3]
-                              else do s <- fetchString mem (addr + 4)
+                              else do s <- fetchString (addr + 4)
                                       return ([chr c1, chr c2, chr c3, chr c4] ++ s)

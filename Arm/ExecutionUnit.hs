@@ -1,3 +1,4 @@
+{-#OPTIONS  -XFlexibleContexts #-}
 module ExecutionUnit
 where
   
@@ -16,11 +17,12 @@ import Loader
 import Operand
 import Program
 import RegisterName
+import Swi
 
 ----------------------------------------------------------------------
 -- Evaluate a single instruction.
 ----------------------------------------------------------------------
-eval :: Instruction -> State CPU ()
+eval :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
 
 -- add two registers
 eval (Add (Reg reg1) (Reg reg2) (Reg reg3))
@@ -292,9 +294,8 @@ eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
 
 -- software interrupt
 eval (Swi (Con isn))
-  = return ()
-  --do dbg <- readIORef (debug cpu)
-    --   swi cpu isn dbg
+  -- do dbg <- readIORef (debug cpu)
+   = swi isn False
 
 
 
@@ -332,3 +333,4 @@ runProgram program = execState runStep
 run :: Program -> IO ()
 run program
   = do putStrLn $ show $ runProgram program -}
+
