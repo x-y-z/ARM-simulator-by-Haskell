@@ -13,7 +13,7 @@
 
 {-#OPTIONS -XFlexibleContexts #-}
 
-module Arm.Debugger
+module Debugger
 where
 
 
@@ -29,7 +29,6 @@ import ParseLib
 import Data.Word
 import Control.Monad.State
 
-
 ----------------------------------------------------------------------
 -- Local libraries.
 ----------------------------------------------------------------------
@@ -41,8 +40,19 @@ import Loader
 import Parser
 import Program
 import RegisterName
+import Main
+import Stage
 
 
+whileM :: Monad m => m Bool -> m a -> m [a]
+whileM  p f = do
+        x <- p
+        if x
+        then do
+                x  <- f
+                xs <- whileM p f
+                return (return x `mplus` xs)
+        else return mzero
 
 ----------------------------------------------------------------------
 -- Debugger state data structure.
@@ -51,6 +61,7 @@ data DebugState
   = Debug
       { bkpts :: [Address]
       , radix :: Radix
+      , cmds  :: Char
       }
   deriving (Show)
 
@@ -66,7 +77,52 @@ dbg program =
 ----------------------------------------------------------------------
 dbgProgram :: Program -> IO CPU
 dbgProgram program
-  = {-let loop cpu dbgs
+  = do cpu <- (execStateT (loadProgram program) 
+                       (CPU emptyMem emptyRegs False emptyCounters emptyAux)) 
+       cpu' <- execStateT startRunning cpu
+       execStateT (dbgStep (Debug [] Hex '?')) cpu'
+
+dbgStep :: (MonadState CPU m, MonadIO m) => DebugState -> m ()
+dbgStep dbgs = do r <- isRunning 
+                  if r 
+                  then do liftIO $ putStr "dbg: "
+                          cmd <- liftIO $ getLine 
+                          liftIO $ putStrLn ""
+                          let cmd' = checkCmd cmd
+                          case head cmd' of
+                           'm' -> do showMem (radix dbgs) 
+                                     dbgStep dbgs {cmds = head cmd'}
+                           'r' -> do showRegs (radix dbgs) 
+                                     dbgStep dbgs {cmds = head cmd'}
+                           'q' -> return ()
+                           'n' -> do singleStep inOrder
+                                     showSurroundingInstructions (radix dbgs)
+                                     dbgStep dbgs {cmds = head cmd'}
+                           '?' -> do showHelp
+                                     dbgStep dbgs {cmds = head cmd'}
+                           'b' -> do dbgs' <- liftIO $ addBreakpoint dbgs
+                                     dbgStep dbgs' {cmds = head cmd'}
+                           's' -> do liftIO $ showDebugState dbgs
+                                     dbgStep dbgs {cmds = head cmd'}
+                           'g' -> do runToBreakpoint dbgs
+                                     dbgStep dbgs {cmds = head cmd'}
+                           'h' -> do liftIO $ putStrLn "hex"
+                                     dbgStep dbgs { radix = Hex, cmds = head cmd' }
+                           'd' -> do liftIO $ putStrLn "decimal"
+                                     dbgStep dbgs { radix = Dec, cmds = head cmd' }
+                           x   -> if and [x >= '1', x <= '9']
+                                    then do stepTimes ((fromEnum x) - (fromEnum '0'))
+                                            showSurroundingInstructions (radix dbgs)
+                                            dbgStep dbgs {cmds = head cmd'}
+                                    else do showSurroundingInstructions (radix dbgs)
+                                            dbgStep dbgs {cmds = head cmd'}
+                  else return ()
+    where checkCmd :: String -> String
+          checkCmd c | null c = (cmds dbgs):c
+                     | otherwise = c
+
+
+{-let loop cpu dbgs
           = do isRunning <- readIORef (running cpu)
                if not isRunning
                  then return ()
@@ -102,22 +158,24 @@ dbgProgram program
                                             loop cpu dbgs
         memSize = (memorySize program `div` 4) + 1
     in-} 
-       do cpu <- (execStateT (loadProgram program) 
-                             (CPU emptyMem emptyRegs True emptyCounters emptyAux)) 
-          cpu' <- execStateT startRunning cpu
-          --return ()
-          execStateT (showSurroundingInstructions Hex) cpu'
-          --loop cpu (Debug [] Hex)
-
+       
 
 
 ----------------------------------------------------------------------
 -- Run the cpu to a breakpoint, or until finished.
 ----------------------------------------------------------------------
-{-
-runToBreakpoint cpu dbgs
+runToBreakpoint :: (MonadState CPU m, MonadIO m) => DebugState -> m ()
+runToBreakpoint dbgs
   = let rad = radix dbgs
         bps = bkpts dbgs
+    in do whileM isRunning (do pc <- getReg R15
+                               case (elemIndex pc bps) of
+                                    Nothing -> do singleStep inOrder                                
+                                    Just _  -> do showSurroundingInstructions rad
+                                                  return ())
+          return ()
+
+{-
         regs = registers cpu
         loop
           = do isRunning <- readIORef (running cpu)
@@ -132,30 +190,27 @@ runToBreakpoint cpu dbgs
                              -> do showSurroundingInstructions rad cpu
                                    return ()
     in loop
-
+-}
 
 
 ----------------------------------------------------------------------
 -- 
 ----------------------------------------------------------------------
-stepTimes cpu n
+stepTimes n
   = if n == 0
       then return ()
-      else do isRunning <- readIORef (running cpu)
-              if not isRunning
-                then return ()
-                else do singleStep cpu
-                        stepTimes cpu (n-1)
+      else do isR <- isRunning
+              if isR
+                then do singleStep inOrder
+                        stepTimes (n-1)
+                else return ()
 
 
 
 ----------------------------------------------------------------------
 -- Add a breakpoint to the breakpoint list.
 ----------------------------------------------------------------------
-addBreakpoint
-  :: DebugState
-  -> IO DebugState
-
+addBreakpoint :: DebugState -> IO DebugState
 addBreakpoint dbgs
   = do putStr "break address: "
        addrStr <- getLine
@@ -169,11 +224,11 @@ addBreakpoint dbgs
 ----------------------------------------------------------------------
 -- Show the current debug state.
 ----------------------------------------------------------------------
-showDebugState dbgs
-  = putStrLn (show dbgs)
+showDebugState :: DebugState -> IO ()
+showDebugState dbgs = putStrLn (show dbgs)
 
 
--}
+
 ----------------------------------------------------------------------
 -- Show help message.
 ----------------------------------------------------------------------
@@ -259,7 +314,7 @@ showSurroundingInstructions radix
 showInstruction :: (MonadState CPU m, MonadIO m) => Radix -> Bool -> Address -> m ()
 showInstruction radix highlight addr
   = do opcode <- readMem addr
-       let instr = decode opcode
+       let instr = Decoder.decode opcode
        let hexOp = formatHex 8 '0' "" opcode
        liftIO $ putStr ((if highlight then ">" else " ") ++ (formatNum radix addr) ++ ": "
                  ++ (formatNum radix opcode) ++ " " ++ (if highlight then ">" else " "))

@@ -11,7 +11,7 @@ import Data.Word
 import Control.Monad.State
 
 import Instruction
-import RegisterName  
+import RegisterName 
 
 type Debug = Bool
 
@@ -79,8 +79,11 @@ stopRunning = setCounter "Running" 0
 
 isRunning :: (MonadState CPU m, MonadIO m) => m Bool
 isRunning = do r <- getCounter "Running"
-               return $ r == 0
+               return $ r == 1
 
+isDebug :: (MonadState CPU m, MonadIO m) => m Bool
+isDebug = do (CPU _ _ dbg _ _) <- get
+             return dbg
 -----------------------------------------------
 -- Register Functions
 -----------------------------------------------

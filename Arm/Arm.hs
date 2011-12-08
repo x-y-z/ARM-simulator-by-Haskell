@@ -5,6 +5,7 @@ import Assembler
 import qualified Main
 import Loader
 import Program
+import Debugger
 
 run :: String -> IO ()
 run fileName
@@ -14,7 +15,7 @@ run fileName
            -> Main.run prog
          Right err
            -> putStrLn err
-{-
+
 ----------------------------------------------------------------------
 -- Debug a program.
 ----------------------------------------------------------------------
@@ -26,8 +27,7 @@ dbg fileName
   = do progOrError <- asmFile fileName
        case progOrError of
          Left prog
-           -> Arm.Debugger.dbg prog
+           -> Debugger.dbg prog
          Right err
            -> putStrLn err
 
--}

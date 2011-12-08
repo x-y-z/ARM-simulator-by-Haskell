@@ -10,12 +10,12 @@ runStep :: (MonadState CPU m, MonadIO m) => m ()
 runStep = do singleStep inOrder
              cyc <- currentCycle
              r   <- isRunning
-             if r || cyc > 1000 then return () else runStep
+             if not r || cyc > 1000 then return () else runStep
 
 singleStep :: (MonadState CPU m, MonadIO m) => Pipeline -> m ()
 singleStep []       = return ()
 singleStep (s : ss) = do r <- isRunning
-                         if r then return () else do {s; singleStep ss}
+                         if r then do {s; singleStep ss} else return ()
 
 
 
