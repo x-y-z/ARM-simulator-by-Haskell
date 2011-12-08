@@ -41,7 +41,7 @@ singleStep
 
 runProgram :: Program -> IO CPU
 runProgram program = do cpu <- (execStateT (loadProgram program) 
-                                (CPU emptyMem emptyRegs emptyCounters emptyAux)) 
+                                (CPU emptyMem emptyRegs False emptyCounters emptyAux)) 
                         cpu' <- execStateT startRunning cpu
                         execStateT runStep cpu'
                     

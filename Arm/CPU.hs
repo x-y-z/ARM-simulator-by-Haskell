@@ -13,24 +13,34 @@ import Control.Monad.State
 import Instruction
 import RegisterName  
 
-data CPU = CPU Memory Registers Counters Auxilary
+type Debug = Bool
+
+
+data CPU = CPU Memory Registers Debug Counters Auxilary
   deriving Show
 
 getMem :: CPU -> Memory
-getMem (CPU memory _ _ _) = memory
+getMem (CPU memory _ _ _ _) = memory
 
 getRegs :: CPU -> Registers
-getRegs (CPU _ regs _ _) = regs
+getRegs (CPU _ regs _ _ _) = regs
+
+getDbg :: CPU -> Debug
+getDbg (CPU _ _ dbg _ _) = dbg
+
+setDbg :: (MonadState CPU m, MonadIO m) => Debug -> m ()
+setDbg dbg = do (CPU m rs _ cs aux) <- get
+                put $ CPU m rs dbg cs aux
 
 getCounters :: CPU -> Counters
-getCounters (CPU _ _ counts _) = counts
+getCounters (CPU _ _ _ counts _) = counts
 
 getAuxilary :: CPU -> Auxilary
-getAuxilary (CPU _ _ _ aux) = aux
+getAuxilary (CPU _ _ _ _ aux) = aux
 
 setAuxilary :: (MonadState CPU m, MonadIO m) => Auxilary -> m ()
-setAuxilary aux = do (CPU m rs cs _) <- get
-                     put $ CPU m rs cs aux
+setAuxilary aux = do (CPU m rs dbg cs _) <- get
+                     put $ CPU m rs dbg cs aux
 
 emptyAux :: Auxilary
 emptyAux = InO [] []
@@ -47,12 +57,12 @@ emptyCounters = Map.insert "Cycles" 0 Map.empty
 
 -- Return 0 when counter name doesn't exist
 getCounter :: (MonadState CPU m, MonadIO m) => String -> m Integer
-getCounter id = do (CPU _ _ cs _) <- get
+getCounter id = do (CPU _ _ _ cs _) <- get
                    if Map.member id cs then return $ cs Map.! id else return 0
 
 setCounter :: (MonadState CPU m, MonadIO m) => String -> Integer -> m ()
-setCounter id cnt = do (CPU m rs cs aux) <- get
-                       put $ CPU m rs (Map.insert id cnt cs) aux
+setCounter id cnt = do (CPU m rs dbg cs aux) <- get
+                       put $ CPU m rs dbg (Map.insert id cnt cs) aux
 
 currentCycle :: (MonadState CPU m, MonadIO m) => m Integer
 currentCycle = getCounter "Cycles"
@@ -104,15 +114,15 @@ emptyRegs = Map.fromList[
 -- Get the value in a register.
 ----------------------------------------------------------------------
 getReg :: (MonadState CPU m, MonadIO m) => RegisterName -> m Word32
-getReg id = do (CPU _ rs _ _) <- get
+getReg id = do (CPU _ rs _ _ _) <- get
                return $ rs Map.! id
 
 ----------------------------------------------------------------------
 -- Set a register with a new value.
 ----------------------------------------------------------------------
 setReg :: (MonadState CPU m, MonadIO m) => RegisterName -> Word32 -> m ()
-setReg id val = do (CPU mem rs cs aux) <- get
-                   put (CPU mem (Map.insert id val rs) cs aux)
+setReg id val = do (CPU mem rs dbg cs aux) <- get
+                   put (CPU mem (Map.insert id val rs) dbg cs aux)
 
 cpsrGetN :: (MonadState CPU m, MonadIO m) => m Word32
 cpsrGetN = cpsrGet 31
@@ -151,7 +161,29 @@ cpsrSet bit = do cpsr <- getReg CPSR
 -- Memory Functions
 ------------------------------------------
 
-type Memory = Map Address Word32
+data Segment = CodeS | DataS | StackS | HeapS deriving (Ord, Eq, Show)
+
+data Bound = Bound {lowerB :: Word32, 
+                    upperB :: Word32} deriving Show
+
+type MemLayout = Map Segment Bound
+
+initMemLayout :: MemLayout
+initMemLayout = Map.fromList [(CodeS, Bound 0 0), (DataS, Bound 0 0), (StackS, Bound 0 0), (HeapS, Bound 0 0)]
+
+getBound :: MemLayout -> Segment -> (Word32, Word32)
+getBound mly seg = case (Map.lookup seg mly) of
+                        Just (Bound l u) -> (l, u)
+                        Nothing          -> error "segment fault"
+
+setBound :: MemLayout -> Segment -> (Word32, Word32) -> MemLayout
+setBound mly seg (l, u) = case (Map.lookup seg mly) of
+                               Just (Bound _ _) -> Map.insert seg (Bound l u) mly
+                               Nothing          -> error "segment fault"
+
+
+data Memory = Memory { layout :: MemLayout,
+                       mem    ::Map Address Word32} deriving (Show)
 
 type Address = Word32
 
@@ -160,19 +192,19 @@ type WordAddress = Address
 type ByteAddress = Address
 
 emptyMem :: Memory
-emptyMem = Map.empty
+emptyMem = Memory initMemLayout Map.empty
 
 wordAddress :: ByteAddress -> WordAddress
 wordAddress addr = addr `div` 4
 
 getMemWord :: (MonadState CPU m, MonadIO m) => WordAddress -> m Word32
-getMemWord addr = do (CPU m _ _ _) <- get
-                     if Map.member addr m 
-                       then return (m Map.! addr) else return 0
+getMemWord addr = do (CPU m _ _ _ _) <- get
+                     if Map.member addr (mem m) 
+                       then return ((mem m) Map.! addr) else return 0
 
 setMemWord :: (MonadState CPU m, MonadIO m) => WordAddress -> Word32 -> m ()
-setMemWord addr val = do (CPU m rs cs aux) <- get
-                         put $ (CPU (Map.insert addr val m) rs cs aux)
+setMemWord addr val = do (CPU m rs dbg cs aux) <- get
+                         put $ (CPU (Memory (layout m) (Map.insert addr val (mem m))) rs dbg cs aux)
 
 readMem :: (MonadState CPU m, MonadIO m) => Address -> m Word32
 readMem byteAddr = getMemWord (wordAddress byteAddr)

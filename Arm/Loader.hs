@@ -23,7 +23,7 @@ loadProgram :: (MonadState CPU m, MonadIO m) => Program -> m ()
 loadProgram program = let org    = origin program
                           instrs = instructions program
                           consts = constants program
-    in do (CPU mem regs _ _) <- get
+    in do (CPU mem regs _ _ _) <- get
           loadRegisters (regInit program)
           setReg R15 org
           setReg PC org
