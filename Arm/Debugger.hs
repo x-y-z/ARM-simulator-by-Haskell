@@ -173,69 +173,65 @@ showDebugState dbgs
   = putStrLn (show dbgs)
 
 
-
+-}
 ----------------------------------------------------------------------
 -- Show help message.
 ----------------------------------------------------------------------
+showHelp :: (MonadState CPU m, MonadIO m) => m ()
 showHelp
-  :: IO ()
-
-showHelp
-  = do putStrLn "  b: add breakpoint"
-       putStrLn "  d: decimal"
-       putStrLn "  g: go (run to next breakpoint)"
-       putStrLn "  h: hexadecimal"
-       putStrLn "  m: dump memory"
-       putStrLn "  q: quit"
-       putStrLn "  r: show registers"
-       putStrLn "  s: show debug state"
-       putStrLn "  1-9: step program 1-9 times"
-       putStrLn "  ?: this help message"
+  = do liftIO $ putStrLn "  b: add breakpoint"
+       liftIO $ putStrLn "  d: decimal"
+       liftIO $ putStrLn "  g: go (run to next breakpoint)"
+       liftIO $ putStrLn "  h: hexadecimal"
+       liftIO $ putStrLn "  m: dump memory"
+       liftIO $ putStrLn "  q: quit"
+       liftIO $ putStrLn "  r: show registers"
+       liftIO $ putStrLn "  s: show debug state"
+       liftIO $ putStrLn "  1-9: step program 1-9 times"
+       liftIO $ putStrLn "  ?: this help message"
 
 
 
 ----------------------------------------------------------------------
 -- Show memory.
 ----------------------------------------------------------------------
-showMem
-  :: Radix
-  -> CPU
-  -> IO ()
+showMem :: (MonadState CPU m, MonadIO m) => Radix -> m ()
 
-showMem radix cpu
-  = do let mem = memory cpu
-       (lo, hi) <- getBounds mem -- :: IO (Int, Int)
-       let hiByte = hi * 4
-       let loop addr
-             = do val <- readMem mem addr
+showMem radix
+  = do (lo, hi) <- getBoundM DataS -- :: IO (Int, Int)
+       forM [lo .. hi] $ \addr -> do val <- readMem addr
+                                     liftIO $ putStrLn (" " ++ (formatNum radix addr) ++ ": " ++ (formatNum radix val))
+       return ()             
+
+
+       {-let loop addr
+             = do val <- readMem addr
                   if addr >= hiByte
                     then return ()
-                    else do putStrLn (" " ++ (formatNum radix addr) ++ ": " ++ (formatNum radix val))
-                            loop (addr + 4)
-       loop lo
+                    else do liftIO $ putStrLn (" " ++ (formatNum radix addr) ++ ": " ++ (formatNum radix val))
+                            liftIO $ loop (addr + 4)
+       loop lo-}
 
 
 
 ----------------------------------------------------------------------
 -- Show all registers.
 ----------------------------------------------------------------------
-showRegs
-  :: Radix
-  -> CPU
-  -> IO ()
+showRegs :: (MonadState CPU m, MonadIO m) => Radix -> m ()
+showRegs radix
+  = let showReg regName
+          = do regVal <- getReg regName
+               liftIO $ putStr ((show regName) ++ "=" ++ (formatNum radix regVal))
+    in do { liftIO $ putStr "  "; showReg R0; liftIO $ putStr "  "; showReg R4; 
+            liftIO $ putStr "   "; showReg R8; liftIO $ putStr "  "; showReg R12; liftIO $ putStrLn "";
+            liftIO $ putStr "  "; showReg R1; liftIO $ putStr "  "; showReg R5; 
+            liftIO $ putStr "   "; showReg R9; liftIO $ putStr "  "; showReg R13; liftIO $ putStrLn "";
+            liftIO $ putStr "  "; showReg R2; liftIO $ putStr "  "; showReg R6; 
+            liftIO $ putStr "  "; showReg R10; liftIO $ putStr "  "; showReg R14; liftIO $ putStrLn "";
+            liftIO $ putStr "  "; showReg R3; liftIO $ putStr "  "; showReg R7; 
+            liftIO $ putStr "  "; showReg R11; liftIO $ putStr "  "; showReg R15; liftIO $ putStrLn "";
+            showReg CPSR; liftIO $ putStr " ("; showCPSRFlags; liftIO $ putStrLn ")" }
 
-showRegs radix cpu
-  = let regs = registers cpu
-        showReg regName
-          = do regVal <- getReg regs regName
-               putStr ((show regName) ++ "=" ++ (formatNum radix regVal))
-    in do { putStr "  "; showReg R0; putStr "  "; showReg R4; putStr "   "; showReg R8; putStr "  "; showReg R12; putStrLn "";
-            putStr "  "; showReg R1; putStr "  "; showReg R5; putStr "   "; showReg R9; putStr "  "; showReg R13; putStrLn "";
-            putStr "  "; showReg R2; putStr "  "; showReg R6; putStr "  "; showReg R10; putStr "  "; showReg R14; putStrLn "";
-            putStr "  "; showReg R3; putStr "  "; showReg R7; putStr "  "; showReg R11; putStr "  "; showReg R15; putStrLn "";
-            showReg CPSR; putStr " ("; showCPSRFlags regs; putStrLn ")" }
-
--}
 
 ----------------------------------------------------------------------
 -- Show instructions before and after current instruction.
@@ -244,47 +240,37 @@ showSurroundingInstructions :: (MonadState CPU m, MonadIO m) => Radix -> m ()
 showSurroundingInstructions radix
   = do r15 <- getReg R15
        let pc      = fromIntegral r15
-       return ()
-{-
-       mem <- get
-       -- let bounds  = range mem
-       bounds <- getBounds mem
-       let hiBound = fromIntegral (snd bounds) * 4
+       bounds <- getBoundM CodeS
+       let hiBound = fromIntegral (snd bounds) 
        let addrsLo = dropWhile (< 0) [pc - 20, pc - 16 .. pc - 4]
-       let shLo    = map (showInstruction radix mem False) (map fromIntegral addrsLo)
+       let shLo    = map (showInstruction radix False) (map fromIntegral addrsLo)
        let addrsHi = takeWhile (< hiBound) [pc + 4, pc + 8 .. pc + 20]
-       let shHi    = map (showInstruction radix mem False) (map fromIntegral addrsHi)
+       let shHi    = map (showInstruction radix False) (map fromIntegral addrsHi)
        sequence shLo
-       showInstruction radix mem True (fromIntegral pc)
+       showInstruction radix True (fromIntegral pc)
        sequence shHi
-     -}
+       return ()
+    
 
-{-
+
 ----------------------------------------------------------------------
 -- Show current instruction (highlighted).
 ----------------------------------------------------------------------
-showInstruction
-  :: Radix
-  -> Memory
-  -> Bool
-  -> Address
-  -> IO ()
-
-showInstruction radix mem highlight addr
-  = do opcode <- readMem mem addr
+showInstruction :: (MonadState CPU m, MonadIO m) => Radix -> Bool -> Address -> m ()
+showInstruction radix highlight addr
+  = do opcode <- readMem addr
        let instr = decode opcode
        let hexOp = formatHex 8 '0' "" opcode
-       putStr ((if highlight then ">" else " ") ++ (formatNum radix addr) ++ ": "
+       liftIO $ putStr ((if highlight then ">" else " ") ++ (formatNum radix addr) ++ ": "
                  ++ (formatNum radix opcode) ++ " " ++ (if highlight then ">" else " "))
        case instr of
          Nothing
-           -> putStrLn ""
+           -> liftIO $ putStrLn ""
          Just instr'
-           -> putStrLn (show instr')
+           -> liftIO $ putStrLn (show instr')
 
 
 
 ----------------------------------------------------------------------
 -- eof
 ----------------------------------------------------------------------
--}

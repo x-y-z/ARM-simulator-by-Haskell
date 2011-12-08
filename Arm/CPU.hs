@@ -156,31 +156,43 @@ cpsrSet :: (MonadState CPU m, MonadIO m) => Int -> m ()
 cpsrSet bit = do cpsr <- getReg CPSR
                  let cpsr' = cpsr `setBit` bit
                  setReg CPSR cpsr'
-                 
+showCPSRFlags :: (MonadState CPU m, MonadIO m) => m ()                 
+showCPSRFlags = do n <- cpsrGetN
+                   z <- cpsrGetZ
+                   c <- cpsrGetC
+                   v <- cpsrGetV
+                   liftIO $ putStr ("N=" ++ show n ++ " Z=" ++ show z ++ " C=" ++ show c ++ " V=" ++ show v)
 ------------------------------------------
 -- Memory Functions
 ------------------------------------------
 
 data Segment = CodeS | DataS | StackS | HeapS deriving (Ord, Eq, Show)
 
-data Bound = Bound {lowerB :: Word32, 
-                    upperB :: Word32} deriving Show
+data Bound = Bound {lowerB :: Address, 
+                    upperB :: Address} deriving Show
 
 type MemLayout = Map Segment Bound
 
 initMemLayout :: MemLayout
 initMemLayout = Map.fromList [(CodeS, Bound 0 0), (DataS, Bound 0 0), (StackS, Bound 0 0), (HeapS, Bound 0 0)]
 
-getBound :: MemLayout -> Segment -> (Word32, Word32)
+getBound :: MemLayout -> Segment -> (Address, Address)
 getBound mly seg = case (Map.lookup seg mly) of
                         Just (Bound l u) -> (l, u)
                         Nothing          -> error "segment fault"
 
-setBound :: MemLayout -> Segment -> (Word32, Word32) -> MemLayout
+setBound :: MemLayout -> Segment -> (Address, Address) -> MemLayout
 setBound mly seg (l, u) = case (Map.lookup seg mly) of
                                Just (Bound _ _) -> Map.insert seg (Bound l u) mly
                                Nothing          -> error "segment fault"
 
+setBoundM :: (MonadState CPU m, MonadIO m) => Segment -> (Address, Address) -> m ()
+setBoundM seg bnd = do (CPU m rs dbg cs aux) <- get
+                       put $ (CPU (Memory (setBound (layout m) seg bnd) (mem m)) rs dbg cs aux)
+
+getBoundM ::  (MonadState CPU m, MonadIO m) => Segment -> m (Address, Address)
+getBoundM seg = do (CPU m rs dbg cs aux) <- get
+                   return (getBound (layout m) seg)
 
 data Memory = Memory { layout :: MemLayout,
                        mem    ::Map Address Word32} deriving (Show)

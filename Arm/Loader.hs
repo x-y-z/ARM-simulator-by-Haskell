@@ -27,8 +27,12 @@ loadProgram program = let org    = origin program
           loadRegisters (regInit program)
           setReg R15 org
           setReg PC org
-          loadInstructions org instrs
+          codeEnd <- loadInstructions org instrs
+          setBoundM CodeS (org, codeEnd)
+          let dataStart = fst (head consts)
+          let dataEnd = fst (last consts)
           loadConstants consts
+          setBoundM DataS (dataStart, dataEnd)
           
 ----------------------------------------------------------------------
 -- Load register pre-load values.
@@ -41,8 +45,8 @@ loadRegisters ((regName, val) : rest) = do setReg regName val
 ----------------------------------------------------------------------
 -- Load a list of instructions into memory.
 ----------------------------------------------------------------------
-loadInstructions :: (MonadState CPU m, MonadIO m) => Address -> [Instruction] -> m ()
-loadInstructions _ [] = return ()
+loadInstructions :: (MonadState CPU m, MonadIO m) => Address -> [Instruction] -> m Word32
+loadInstructions addr [] = return (addr - 4)
 loadInstructions addr (ins : inss)
   = do let opcode = encode ins
        writeMem addr opcode
@@ -53,7 +57,6 @@ loadInstructions addr (ins : inss)
 ----------------------------------------------------------------------
 loadConstants :: (MonadState CPU m, MonadIO m) => [(Address, Constant)] -> m ()
 loadConstants [] = return ()
-
 loadConstants ((addr, const) : consts)
   = do loadConstant addr const
        loadConstants consts
