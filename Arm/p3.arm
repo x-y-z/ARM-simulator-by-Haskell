@@ -12,17 +12,26 @@
 
             origin 16
             reg r0 = DATA1
+	    reg r3 = DATA1
 
-TOP:        mov r1, #100		; this is the top of the loop
-LOOP:       add r1, r1, #4
-            cmp r1, #200
-            bne LOOP
+TOP:        mov r1, #0
+LOOP1:      add r1, r1, #1
+	    add r0, r0, #4
+	    str r1, [r0]
+            cmp r1, #50
+            bne LOOP1
+	    mov r1, #0
+	    mov r2, #0
+LOOP2:	    ldr r4, [r3]
+	    add r2, r2, r4
+	    add r1, r1, #1
+	    add r3, r3, #4
+	    cmp r1, #50
+	    bne LOOP2
             swi #11
 
 DATA1     = 0,1,2
             3,4,5
-
-DATA2     = 100
 
 MSG1      = "Hello, World!"
 

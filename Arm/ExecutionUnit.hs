@@ -59,7 +59,7 @@ eval (Beq (Rel offset))
                     else pc' + (fromIntegral offset)
        z <- cpsrGetZ
        if z == 1
-         then setReg R15 pc''
+         then do setReg R15 pc''
          else return ()
 
 -- branch if greater than
@@ -71,7 +71,7 @@ eval (Bgt (Rel offset))
                     else pc' + (fromIntegral offset)
        c <- cpsrGetC
        if c == 1
-         then setReg R15 pc''
+         then do setReg R15 pc''
          else return ()
 
 -- bit clear
@@ -99,7 +99,7 @@ eval (Blt (Rel offset))
                     else pc' + (fromIntegral offset)
        n <- cpsrGetN
        if n == 1
-         then setReg R15 pc''
+         then do setReg R15 pc''
          else return ()
 
 -- branch if not equal
@@ -298,39 +298,275 @@ eval (Swi (Con isn))
    = swi isn False
 
 
+evalInO :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
 
-----------------------------------------------------------------------
--- Run a CPU until its running flag is set to False.
-----------------------------------------------------------------------
-{-
-runStep :: State CPU ()
-runStep = do singleStep
-             cyc <- currentCycle
-             r   <- isRunning
-             if r || cyc > 1000 then return () else runStep
+-- add two registers
+evalInO (Add (Reg reg1) (Reg reg2) (Reg reg3))
+  = do r2 <- getReg reg2
+       r3 <- getReg reg3
+       setReg reg1 (r2 + r3)
 
-singleStep :: State CPU ()
-singleStep = do pc <- getReg R15
-                opcode <- readMem pc
-                if opcode == 0 then stopRunning
-                  else case (decode opcode) of
-                  Nothing -> fail ("ERROR: can't decode " ++ 
-                                     "instruction " ++ 
-                                     (formatHex 8 '0' "" opcode) ++ 
-                                     " at adddress " ++ 
-                                     show pc ++ " (dec)")
-                  Just instr' -> do setReg R15 (pc + 4)
-                                    nextCycle
-                                    eval instr'
+evalInO (Add (Reg reg1) (Reg reg2) (Con con1))
+  = do r2 <- getReg reg2
+       setReg reg1 (r2 + con1)
 
+-- logical bit-wise and
+evalInO (And (Reg reg1) (Reg reg2) (Reg reg3))
+  = do r2 <- getReg reg2
+       r3 <- getReg reg3
+       setReg reg1 (r2 .&. r3)
 
-runProgram :: Program -> CPU
-runProgram program = execState runStep
-                     (execState startRunning 
-                     (execState (loadProgram program) 
-                      (CPU emptyMem emptyRegs emptyCounters emptyAux)))
+-- branch unconditionally
+-- TODO:  Change this to use actual PC rather than R15
+evalInO (B (Rel offset))
+  = do pc <- getReg R15
+       let pc' = pc - 8
+       let pc'' = if offset < 0
+                    then pc' - (fromIntegral (-offset))
+                    else pc' + (fromIntegral offset)
+       setReg R15 pc''
+       flushPipeline
 
-run :: Program -> IO ()
-run program
-  = do putStrLn $ show $ runProgram program -}
+-- branch if equal
+evalInO (Beq (Rel offset))
+  = do pc <- getReg R15
+       let pc' = pc - 8
+       let pc'' = if offset < 0
+                    then pc' - (fromIntegral (-offset))
+                    else pc' + (fromIntegral offset)
+       z <- cpsrGetZ
+       if z == 1
+         then do {setReg R15 pc''; flushPipeline}
+         else return ()
 
+-- branch if greater than
+evalInO (Bgt (Rel offset))
+  = do pc <- getReg R15
+       let pc' = pc - 8
+       let pc'' = if offset < 0
+                    then pc' - (fromIntegral (-offset))
+                    else pc' + (fromIntegral offset)
+       c <- cpsrGetC
+       if c == 1
+         then do {setReg R15 pc''; flushPipeline}
+         else return ()
+
+-- bit clear
+evalInO (Bic (Reg reg1) (Reg reg2) (Reg reg3))
+  = do r2 <- getReg reg2
+       r3 <- getReg reg3
+       setReg reg1 (r2 .&. (complement r3))
+
+-- branch and link
+evalInO (Bl (Rel offset))
+  = do pc <- getReg R15
+       let pc' = pc - 8
+       let pc'' = if offset < 0
+                    then pc' - (fromIntegral (-offset))
+                    else pc' + (fromIntegral offset)
+       setReg R14 pc
+       setReg R15 pc''
+       flushPipeline
+
+-- branch if less than
+evalInO (Blt (Rel offset))
+  = do pc <- getReg R15
+       let pc' = pc - 8
+       let pc'' = if offset < 0
+                    then pc' - (fromIntegral (-offset))
+                    else pc' + (fromIntegral offset)
+       n <- cpsrGetN
+       if n == 1
+         then do {setReg R15 pc''; flushPipeline}
+         else return ()
+
+-- branch if not equal
+evalInO (Bne (Rel offset))
+  = do pc <- getReg R15
+       let pc' = pc - 8
+       let pc'' = if offset < 0
+                    then pc' - (fromIntegral (-offset))
+                    else pc' + (fromIntegral offset)
+       z <- cpsrGetZ
+       if z == 0
+         then do {setReg R15 pc''; flushPipeline}
+         else return ()
+
+-- compare two values
+evalInO (Cmp (Reg reg1) op2)
+  = do r1 <- getReg reg1
+       let val1 = fromIntegral r1
+       val2 <- case op2 of
+                 Con c -> return (fromIntegral c)
+                 Reg r -> do r' <- getReg r
+                             return (fromIntegral r')
+       setReg CPSR 0
+       if val1 < val2
+         then cpsrSetN
+         else if val1 == val2
+                then cpsrSetZ
+                else cpsrSetC
+
+-- logical bit-wise exclusive or
+evalInO (Eor (Reg reg1) (Reg reg2) (Reg reg3))
+  = do r2 <- getReg reg2
+       r3 <- getReg reg3
+       setReg reg1 (r2 `xor` r3)
+
+-- load multiple registers, empty ascending
+evalInO (Ldmea op1 (Mrg regList))
+  = do let (reg, writeBack) = case op1 of { Aut (Reg r) -> (r, True); Reg r -> (r, False) }
+       addr <- getReg reg
+       let loadRegs addr []
+             = return (addr + 4)
+           loadRegs addr (r : rs)
+             = do queueLoad r addr
+                  loadRegs (addr - 4) rs
+       addr' <- loadRegs (addr - 4) (reverse regList)
+       if writeBack
+         then setReg reg addr'
+         else return ()
+              
+-- load register
+evalInO (Ldr (Reg reg1) op2)
+  = do addr <- case op2 of
+                Ind reg2
+                  -> do addr <- getReg reg2
+                        queueLoad reg1 addr
+                Bas reg2 offset
+                  -> do addr <- getReg reg2
+                        queueLoad reg1 (addr + offset)
+                Aut (Bas reg2 offset)
+                  -> do addr <- getReg reg2
+                        setReg reg2 (addr + offset)
+                        queueLoad reg1 (addr + offset)
+                Pos (Ind reg2) offset
+                  -> do addr <- getReg reg2
+                        setReg reg2 (addr + offset)
+                        queueLoad reg1 addr
+       return ()
+
+-- load register, unsigned byte
+evalInO (Ldrb (Reg reg1) op2)
+  = do addr
+         <- case op2 of
+              Ind reg2
+                -> do addr <- getReg reg2
+                      return addr
+              Bas reg2 offset
+                -> do addr <- getReg reg2
+                      return (addr + offset)
+              Aut (Bas reg2 offset)
+                -> do addr <- getReg reg2
+                      setReg reg2 (addr + offset)  -- write the address back into reg2
+                      return (addr + offset)
+              Pos (Ind reg2) offset
+                -> do addr <- getReg reg2
+                      setReg reg2 (addr + offset)  -- write addr + offset back into reg2
+                      return addr
+       val <- readMem addr
+       let byteOffset = fromIntegral (addr .&. 3)
+       let byte = 0xFF .&. (val `shiftR` (byteOffset * 8))
+       setReg reg1 byte
+
+-- move constant into register
+evalInO (Mov (Reg reg) (Con con))
+  = setReg reg con
+
+-- move register into register
+evalInO (Mov (Reg reg1) (Reg reg2))
+  = do val <- getReg reg2
+       setReg reg1 val
+
+evalInO (Mul (Reg reg1) (Reg reg2) (Reg reg3))
+  = do r2 <- getReg reg2
+       r3 <- getReg reg3
+       let prod = (r2 * r3) .&. 0x7FFFFFFF
+       setReg reg1 prod
+
+-- logical bit-wise or
+evalInO (Orr (Reg reg1) (Reg reg2) (Reg reg3))
+  = do r2 <- getReg reg2
+       r3 <- getReg reg3
+       setReg reg1 (r2 .|. r3)
+
+-- load multiple registers, empty ascending
+evalInO (Stmea op1 (Mrg regList))
+  = do let (reg, writeBack) = case op1 of { Aut (Reg r) -> (r, True); Reg r -> (r, False) }
+       addr <- getReg reg
+       let storeRegs addr []
+             = return addr
+           storeRegs addr (r : rs)
+             = do queueStore r addr
+                  storeRegs (addr + 4) rs
+       addr' <- storeRegs addr regList
+       if writeBack
+         then setReg reg addr'
+         else return ()
+
+-- store register
+evalInO (Str (Reg reg1) op2)
+  = do case op2 of
+         Ind reg2
+           -> do addr <- getReg reg2
+                 queueStore reg1 addr
+         Aut (Bas reg2 offset)
+           -> do addr <- getReg reg2
+                 let addr' = addr + offset
+                 queueStore reg1 addr'
+                 setReg reg2 addr'
+         Bas reg2 offset
+           -> do addr <- getReg reg2
+                 queueStore reg1 (addr + offset)
+         Pos (Ind reg2) offset
+           -> do addr <- getReg reg2
+                 queueStore reg1 addr
+                 setReg reg2 (addr + offset)
+
+-- store register, unsigned byte
+evalInO (Strb (Reg reg1) op2)
+  = do val <- getReg reg1
+       let val' = val .&. 0xFF
+       case op2 of
+         Ind reg2
+           -> do addr <- getReg reg2
+                 wrd <- readMem addr
+                 let byteOffset = fromIntegral (addr .&. 3)
+                 let val'' = val' `shiftL` (byteOffset * 8)
+                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
+                 writeMem addr ((wrd .&. mask) .|. val'')
+         Aut (Bas reg2 offset)
+           -> do addr <- getReg reg2
+                 let addr' = addr + offset
+                 wrd <- readMem addr'
+                 let byteOffset = fromIntegral (addr' .&. 3)
+                 let val'' = val' `shiftL` (byteOffset * 8)
+                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
+                 writeMem addr' ((wrd .&. mask) .|. val'')
+                 setReg reg2 addr'  -- write the address back into reg2
+         Bas reg2 offset
+           -> do addr <- getReg reg2
+                 let addr' = addr + offset
+                 wrd <- readMem addr'
+                 let byteOffset = fromIntegral (addr' .&. 3)
+                 let val'' = val' `shiftL` (byteOffset * 8)
+                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
+                 writeMem addr' ((wrd .&. mask) .|. val'')
+         Pos (Ind reg2) offset
+           -> do addr <- getReg reg2
+                 wrd <- readMem addr
+                 let byteOffset = fromIntegral (addr .&. 3)
+                 let val'' = val' `shiftL` (byteOffset * 8)
+                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
+                 writeMem addr ((wrd .&. mask) .|. val'')
+                 setReg reg2 (addr + offset)  -- write addr + offset back into reg2
+
+-- subtract two registers
+evalInO (Sub (Reg reg1) (Reg reg2) (Reg reg3))
+  = do r2 <- getReg reg2
+       r3 <- getReg reg3
+       setReg reg1 (r2 - r3)
+
+-- software interrupt
+evalInO (Swi (Con isn))
+   = swi isn False

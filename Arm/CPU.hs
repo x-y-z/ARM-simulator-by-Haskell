@@ -11,7 +11,7 @@ import Data.Word
 import Control.Monad.State
 
 import Instruction
-import RegisterName  
+import RegisterName
 
 data CPU = CPU Memory Registers Counters Auxilary
   deriving Show
@@ -32,18 +32,55 @@ setAuxilary :: (MonadState CPU m, MonadIO m) => Auxilary -> m ()
 setAuxilary aux = do (CPU m rs cs _) <- get
                      put $ CPU m rs cs aux
 
+flushPipeline :: (MonadState CPU m, MonadIO m) => m ()
+flushPipeline = setAuxilary emptyAux
+
 emptyAux :: Auxilary
-emptyAux = InO [] []
+emptyAux = InO [] [] [] []
 
 data Auxilary = 
     Nil
-  | InO {fd :: [Word32], de :: [Instruction]}
+  | InO {fd :: [Word32], de :: [Instruction], em :: [(RegisterName,Address)], ew :: [(RegisterName,Address)]}
   deriving Show
+
+queueLoad :: (MonadState CPU m, MonadIO m) => RegisterName -> Address -> m ()
+queueLoad reg addr = do (CPU _ _ _ aux) <- get
+                        case aux of
+                          Nil -> fail "Need In-order auxilary data"
+                          (InO fd de em ew) -> 
+                            setAuxilary (InO fd de 
+                                         (em ++ [(reg,addr)]) ew)
+                                               
+getLoad :: (MonadState CPU m, MonadIO m) => m (Maybe (RegisterName,Address))
+getLoad = do (CPU _ _ _ aux) <- get
+             case aux of
+               Nil -> fail "Need In-order auxilary data"
+               (InO _ _ [] _) -> return Nothing
+               (InO fd de (x:xs) ew) -> do setAuxilary (InO fd de xs ew)
+                                           return (Just x)
+                 
+
+queueStore :: (MonadState CPU m, MonadIO m) => RegisterName -> Address -> m ()
+queueStore reg addr = do (CPU _ _ _ aux) <- get
+                         case aux of
+                           Nil -> fail "Need In-order auxilary data"
+                           (InO fd de em ew) -> 
+                             setAuxilary (InO fd de em 
+                                          (ew ++ [(reg,addr)]))
+
+getStore :: (MonadState CPU m, MonadIO m) => m (Maybe (RegisterName,Address))
+getStore = do (CPU _ _ _ aux) <- get
+              case aux of
+               Nil -> fail "Need In-order auxilary data"
+               (InO _ _ _ []) -> return Nothing
+               (InO fd de em (x:xs)) -> do setAuxilary (InO fd de em xs)
+                                           return (Just x)
 
 type Counters = Map String Integer
 
 emptyCounters :: Counters
-emptyCounters = Map.insert "Cycles" 0 Map.empty
+emptyCounters = (Map.insert "StallUntil" 0 
+                 (Map.insert "Cycles" 0 Map.empty))
 
 -- Return 0 when counter name doesn't exist
 getCounter :: (MonadState CPU m, MonadIO m) => String -> m Integer
@@ -53,6 +90,14 @@ getCounter id = do (CPU _ _ cs _) <- get
 setCounter :: (MonadState CPU m, MonadIO m) => String -> Integer -> m ()
 setCounter id cnt = do (CPU m rs cs aux) <- get
                        put $ CPU m rs (Map.insert id cnt cs) aux
+
+stallForN :: (MonadState CPU m, MonadIO m) => Integer -> m ()
+stallForN n = do cyc <- currentCycle
+                 setCounter "StallUntil" (cyc + n)
+              
+
+stallCycle :: (MonadState CPU m, MonadIO m) => m Integer
+stallCycle = getCounter "StallUntil"
 
 currentCycle :: (MonadState CPU m, MonadIO m) => m Integer
 currentCycle = getCounter "Cycles"
@@ -69,7 +114,7 @@ stopRunning = setCounter "Running" 0
 
 isRunning :: (MonadState CPU m, MonadIO m) => m Bool
 isRunning = do r <- getCounter "Running"
-               return $ r == 0
+               return $ r == 1
 
 -----------------------------------------------
 -- Register Functions
@@ -151,7 +196,8 @@ cpsrSet bit = do cpsr <- getReg CPSR
 -- Memory Functions
 ------------------------------------------
 
-type Memory = Map Address Word32
+data Memory = Mem CacheHierarchy (Map Address Word32)
+  deriving Show
 
 type Address = Word32
 
@@ -159,23 +205,123 @@ type WordAddress = Address
 
 type ByteAddress = Address
 
-emptyMem :: Memory
-emptyMem = Map.empty
+emptyMem :: Hierarchy -> Memory
+emptyMem h = Mem (buildHierarchy h) Map.empty
 
 wordAddress :: ByteAddress -> WordAddress
 wordAddress addr = addr `div` 4
 
 getMemWord :: (MonadState CPU m, MonadIO m) => WordAddress -> m Word32
-getMemWord addr = do (CPU m _ _ _) <- get
+getMemWord addr = do (CPU (Mem c m) _ _ _) <- get
                      if Map.member addr m 
                        then return (m Map.! addr) else return 0
 
 setMemWord :: (MonadState CPU m, MonadIO m) => WordAddress -> Word32 -> m ()
-setMemWord addr val = do (CPU m rs cs aux) <- get
-                         put $ (CPU (Map.insert addr val m) rs cs aux)
+setMemWord addr val = do (CPU (Mem c m) rs cs aux) <- get
+                         put $ (CPU (Mem c (Map.insert addr val m)) rs cs aux)
 
 readMem :: (MonadState CPU m, MonadIO m) => Address -> m Word32
-readMem byteAddr = getMemWord (wordAddress byteAddr)
+readMem byteAddr = do val <- getMemWord (wordAddress byteAddr)
+                      lat <- loadCache byteAddr
+                      updateCache byteAddr
+                      return val
     
 writeMem :: (MonadState CPU m, MonadIO m) => Address -> Word32 -> m ()
-writeMem byteAddr val = setMemWord (wordAddress byteAddr) val
+writeMem byteAddr val = do updateCache byteAddr
+                           setMemWord (wordAddress byteAddr) val
+
+-- CacheLevel Size Block-Size Associativity Latency
+data CacheLevel = CacheLevel Integer Integer Integer Integer
+  deriving Show
+
+type Hierarchy = [CacheLevel]
+
+type CacheHierarchy = [Cache]
+
+buildHierarchy :: Hierarchy -> CacheHierarchy
+buildHierarchy []     = []
+buildHierarchy (x:xs) = (Cache x Map.empty) : (buildHierarchy xs)
+
+standardCache :: Hierarchy
+standardCache = [(CacheLevel 32768 32 1 10), (CacheLevel 4194304 128 2 100)]
+
+-- Only determine if a block would be in the cache, simplify implementation by 
+-- not actually storing data there
+type Line = (Word32,Bool)
+
+type Set = [Line]
+
+-- Cache CacheLevel Latency (Map Index [(Tag,Dirty,Word32)])
+data Cache = Cache CacheLevel (Map Word32 Set)
+  deriving Show
+
+updateCache :: (MonadState CPU m, MonadIO m) => Address -> m ()
+updateCache addr = do (CPU (Mem c m) rs cs aux) <- get
+                      put (CPU 
+                           (Mem 
+                            (foldr 
+                             (\c cs -> (insertInCache c addr) : cs) [] c) 
+                            m) rs cs aux)
+    
+insertInCache :: Cache -> Address -> Cache
+insertInCache c@(Cache l m) addr = 
+  if Map.member idx m then 
+    let set = m Map.! idx in
+    (Cache l (Map.insert idx (insertInSet set tag) m))
+  else (Cache l (Map.insert idx (insertInSet [] tag) m))
+  where
+    idx = getIndex addr l
+    tag = getTag addr l
+
+-- Doing lru replacement by just removing the first thing in the list
+insertInSet :: Set -> Word32 -> Set
+insertInSet s tag = if any (\(t,_) -> (tag == t)) s then s 
+                        else aux s tag
+  where
+    aux []     t = [(t,False)]
+    aux (l:ls) t = ls ++ [(t,False)]
+
+latency :: CacheLevel -> Integer
+latency (CacheLevel _ _ _ l) = l
+
+-- Simulate a load to the cache hierarchy and return the latency for this load
+loadCache :: (MonadState CPU m, MonadIO m) => Address -> m Integer
+loadCache addr = do (CPU (Mem c m) _ _ _) <- get
+                    return $ foldr f 1000 c
+  where
+    f cache@(Cache lev ls) i = if inCache addr cache
+                         then min (latency lev) i else i
+                                                       
+inCache :: Address -> Cache -> Bool
+inCache addr (Cache lev st) = (Map.member idx st) && 
+                              (any (\(t,_) -> t == tag) lns)
+  where
+    idx = getIndex addr lev
+    tag = getTag addr lev
+    lns = st Map.! idx
+
+offsetBits :: CacheLevel -> Int
+offsetBits (CacheLevel _ b _ _) = round $ logBase 2 (fromInteger b)
+
+indexBits :: CacheLevel -> Int
+indexBits (CacheLevel si bi ai _) = round $ logBase 2 (s / (b * a))
+  where
+    s = fromInteger si
+    b = fromInteger bi
+    a = fromInteger ai
+
+-- Using 32 bit addresses
+tagBits :: CacheLevel -> Int
+tagBits c = 32 - (indexBits c) - (offsetBits c)
+
+getTag :: Address -> CacheLevel -> Word32
+getTag addr c = shiftR addr (32 - (tagBits c))
+
+getIndex :: Address -> CacheLevel -> Word32
+getIndex addr c = a .&. mask
+  where
+    a    = shiftR addr (offsetBits c)
+    mask = complement $ shiftL (complement (0 :: Word32)) (indexBits c)
+    
+getOffset :: Address -> CacheLevel -> Word32
+getOffset addr (CacheLevel _ b _ _) = addr `mod` (fromIntegral b)
