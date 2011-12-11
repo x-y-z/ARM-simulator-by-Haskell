@@ -50,7 +50,6 @@ decode word
     in case bits (27, 24) of
          0xF -> Just (Swi (Con (bits (23, 0))))
          _   -> case bits (27, 25) of
-                  0x4 -> decodeMReg word firstOp -- multiple register transfer
                   0x5 -> decodeBranch word
                   _   -> case (bits (27, 26)) of
                            0x0  -- multiplication or data processing instructions
@@ -110,30 +109,10 @@ decodeDataProc opcode destReg firstOp op2
       _    -> Nothing
 
 ----------------------------------------
-decodeMReg word firstOp
-  = let bits = splitWord word
-        bit x = splitWord word (x, x)
-        instr = case (bit 20) of
-                  0x0 -> Ldmea
-                  0x1 -> Stmea
-        rn = case (bit 21) of
-               0x0 -> Reg firstOp
-               0x1 -> (Aut (Reg firstOp))
-        regList 0 _ = []
-        regList n regNum
-          | odd n  = (nthReg regNum) : (regList (n `div` 2) (regNum + 1))
-          | even n = regList (n `div` 2) (regNum + 1)
-        regs = regList (fromIntegral (bits (15, 0))) 0
-    in Just (instr rn (Mrg regs))
-
-
-----------------------------------------
 decodeDataTrans word destReg
   = let bits = splitWord word
         bit x = splitWord word (x, x)
         instr = case (bit 22, bit 20) of
-                  (0, 0) -> Ldrb
-                  (0, 1) -> Strb
                   (1, 0) -> Ldr
                   (1, 1) -> Str
         baseReg = nthReg (bits (19, 16))

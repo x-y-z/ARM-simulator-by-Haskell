@@ -134,21 +134,6 @@ eval (Eor (Reg reg1) (Reg reg2) (Reg reg3))
   = do r2 <- getReg reg2
        r3 <- getReg reg3
        setReg reg1 (r2 `xor` r3)
-
--- load multiple registers, empty ascending
-eval (Ldmea op1 (Mrg regList))
-  = do let (reg, writeBack) = case op1 of { Aut (Reg r) -> (r, True); Reg r -> (r, False) }
-       addr <- getReg reg
-       let loadRegs addr []
-             = return (addr + 4)
-           loadRegs addr (r : rs)
-             = do val <- readMem addr
-                  setReg r val
-                  loadRegs (addr - 4) rs
-       addr' <- loadRegs (addr - 4) (reverse regList)
-       if writeBack
-         then setReg reg addr'
-         else return ()
               
 -- load register
 eval (Ldr (Reg reg1) op2)
@@ -168,29 +153,6 @@ eval (Ldr (Reg reg1) op2)
                         setReg reg2 (addr + offset)  -- write addr + offset back into reg2
                         readMem addr
        setReg reg1 val
-
--- load register, unsigned byte
-eval (Ldrb (Reg reg1) op2)
-  = do addr
-         <- case op2 of
-              Ind reg2
-                -> do addr <- getReg reg2
-                      return addr
-              Bas reg2 offset
-                -> do addr <- getReg reg2
-                      return (addr + offset)
-              Aut (Bas reg2 offset)
-                -> do addr <- getReg reg2
-                      setReg reg2 (addr + offset)  -- write the address back into reg2
-                      return (addr + offset)
-              Pos (Ind reg2) offset
-                -> do addr <- getReg reg2
-                      setReg reg2 (addr + offset)  -- write addr + offset back into reg2
-                      return addr
-       val <- readMem addr
-       let byteOffset = fromIntegral (addr .&. 3)
-       let byte = 0xFF .&. (val `shiftR` (byteOffset * 8))
-       setReg reg1 byte
 
 -- move constant into register
 eval (Mov (Reg reg) (Con con))
@@ -213,21 +175,6 @@ eval (Orr (Reg reg1) (Reg reg2) (Reg reg3))
        r3 <- getReg reg3
        setReg reg1 (r2 .|. r3)
 
--- load multiple registers, empty ascending
-eval (Stmea op1 (Mrg regList))
-  = do let (reg, writeBack) = case op1 of { Aut (Reg r) -> (r, True); Reg r -> (r, False) }
-       addr <- getReg reg
-       let storeRegs addr []
-             = return addr
-           storeRegs addr (r : rs)
-             = do val <- getReg r
-                  writeMem addr val
-                  storeRegs (addr + 4) rs
-       addr' <- storeRegs addr regList
-       if writeBack
-         then setReg reg addr'
-         else return ()
-
 -- store register
 eval (Str (Reg reg1) op2)
   = do val <- getReg reg1
@@ -246,44 +193,6 @@ eval (Str (Reg reg1) op2)
          Pos (Ind reg2) offset
            -> do addr <- getReg reg2
                  writeMem addr val
-                 setReg reg2 (addr + offset)  -- write addr + offset back into reg2
-
--- store register, unsigned byte
-eval (Strb (Reg reg1) op2)
-  = do val <- getReg reg1
-       let val' = val .&. 0xFF
-       case op2 of
-         Ind reg2
-           -> do addr <- getReg reg2
-                 wrd <- readMem addr
-                 let byteOffset = fromIntegral (addr .&. 3)
-                 let val'' = val' `shiftL` (byteOffset * 8)
-                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
-                 writeMem addr ((wrd .&. mask) .|. val'')
-         Aut (Bas reg2 offset)
-           -> do addr <- getReg reg2
-                 let addr' = addr + offset
-                 wrd <- readMem addr'
-                 let byteOffset = fromIntegral (addr' .&. 3)
-                 let val'' = val' `shiftL` (byteOffset * 8)
-                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
-                 writeMem addr' ((wrd .&. mask) .|. val'')
-                 setReg reg2 addr'  -- write the address back into reg2
-         Bas reg2 offset
-           -> do addr <- getReg reg2
-                 let addr' = addr + offset
-                 wrd <- readMem addr'
-                 let byteOffset = fromIntegral (addr' .&. 3)
-                 let val'' = val' `shiftL` (byteOffset * 8)
-                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
-                 writeMem addr' ((wrd .&. mask) .|. val'')
-         Pos (Ind reg2) offset
-           -> do addr <- getReg reg2
-                 wrd <- readMem addr
-                 let byteOffset = fromIntegral (addr .&. 3)
-                 let val'' = val' `shiftL` (byteOffset * 8)
-                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
-                 writeMem addr ((wrd .&. mask) .|. val'')
                  setReg reg2 (addr + offset)  -- write addr + offset back into reg2
 
 -- subtract two registers
@@ -413,20 +322,6 @@ evalInO (Eor (Reg reg1) (Reg reg2) (Reg reg3))
   = do r2 <- getReg reg2
        r3 <- getReg reg3
        setReg reg1 (r2 `xor` r3)
-
--- load multiple registers, empty ascending
-evalInO (Ldmea op1 (Mrg regList))
-  = do let (reg, writeBack) = case op1 of { Aut (Reg r) -> (r, True); Reg r -> (r, False) }
-       addr <- getReg reg
-       let loadRegs addr []
-             = return (addr + 4)
-           loadRegs addr (r : rs)
-             = do queueLoad r addr
-                  loadRegs (addr - 4) rs
-       addr' <- loadRegs (addr - 4) (reverse regList)
-       if writeBack
-         then setReg reg addr'
-         else return ()
               
 -- load register
 evalInO (Ldr (Reg reg1) op2)
@@ -446,29 +341,6 @@ evalInO (Ldr (Reg reg1) op2)
                         setReg reg2 (addr + offset)
                         queueLoad reg1 addr
        return ()
-
--- load register, unsigned byte
-evalInO (Ldrb (Reg reg1) op2)
-  = do addr
-         <- case op2 of
-              Ind reg2
-                -> do addr <- getReg reg2
-                      return addr
-              Bas reg2 offset
-                -> do addr <- getReg reg2
-                      return (addr + offset)
-              Aut (Bas reg2 offset)
-                -> do addr <- getReg reg2
-                      setReg reg2 (addr + offset)  -- write the address back into reg2
-                      return (addr + offset)
-              Pos (Ind reg2) offset
-                -> do addr <- getReg reg2
-                      setReg reg2 (addr + offset)  -- write addr + offset back into reg2
-                      return addr
-       val <- readMem addr
-       let byteOffset = fromIntegral (addr .&. 3)
-       let byte = 0xFF .&. (val `shiftR` (byteOffset * 8))
-       setReg reg1 byte
 
 -- move constant into register
 evalInO (Mov (Reg reg) (Con con))
@@ -491,20 +363,6 @@ evalInO (Orr (Reg reg1) (Reg reg2) (Reg reg3))
        r3 <- getReg reg3
        setReg reg1 (r2 .|. r3)
 
--- load multiple registers, empty ascending
-evalInO (Stmea op1 (Mrg regList))
-  = do let (reg, writeBack) = case op1 of { Aut (Reg r) -> (r, True); Reg r -> (r, False) }
-       addr <- getReg reg
-       let storeRegs addr []
-             = return addr
-           storeRegs addr (r : rs)
-             = do queueStore r addr
-                  storeRegs (addr + 4) rs
-       addr' <- storeRegs addr regList
-       if writeBack
-         then setReg reg addr'
-         else return ()
-
 -- store register
 evalInO (Str (Reg reg1) op2)
   = do case op2 of
@@ -523,44 +381,6 @@ evalInO (Str (Reg reg1) op2)
            -> do addr <- getReg reg2
                  queueStore reg1 addr
                  setReg reg2 (addr + offset)
-
--- store register, unsigned byte
-evalInO (Strb (Reg reg1) op2)
-  = do val <- getReg reg1
-       let val' = val .&. 0xFF
-       case op2 of
-         Ind reg2
-           -> do addr <- getReg reg2
-                 wrd <- readMem addr
-                 let byteOffset = fromIntegral (addr .&. 3)
-                 let val'' = val' `shiftL` (byteOffset * 8)
-                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
-                 writeMem addr ((wrd .&. mask) .|. val'')
-         Aut (Bas reg2 offset)
-           -> do addr <- getReg reg2
-                 let addr' = addr + offset
-                 wrd <- readMem addr'
-                 let byteOffset = fromIntegral (addr' .&. 3)
-                 let val'' = val' `shiftL` (byteOffset * 8)
-                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
-                 writeMem addr' ((wrd .&. mask) .|. val'')
-                 setReg reg2 addr'  -- write the address back into reg2
-         Bas reg2 offset
-           -> do addr <- getReg reg2
-                 let addr' = addr + offset
-                 wrd <- readMem addr'
-                 let byteOffset = fromIntegral (addr' .&. 3)
-                 let val'' = val' `shiftL` (byteOffset * 8)
-                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
-                 writeMem addr' ((wrd .&. mask) .|. val'')
-         Pos (Ind reg2) offset
-           -> do addr <- getReg reg2
-                 wrd <- readMem addr
-                 let byteOffset = fromIntegral (addr .&. 3)
-                 let val'' = val' `shiftL` (byteOffset * 8)
-                 let mask = complement (0xFF `shiftL` (byteOffset * 8))
-                 writeMem addr ((wrd .&. mask) .|. val'')
-                 setReg reg2 (addr + offset)  -- write addr + offset back into reg2
 
 -- subtract two registers
 evalInO (Sub (Reg reg1) (Reg reg2) (Reg reg3))

@@ -167,19 +167,9 @@ encode (Eor (Reg r1) (Reg r2) op2)
     in w1 .|. w2
 
 ----------------------------------------
--- load multiple registers
-encode (Ldmea op1 (Mrg regs))
-  = encodeMReg 0x0 op1 regs
-
-----------------------------------------
 -- load register
 encode (Ldr (Reg r1) op2)
   = encodeLdrStr 0x0 0x1 r1 op2
-
-----------------------------------------
--- load register, unsigned byte
-encode (Ldrb (Reg r1) op2)
-  = encodeLdrStr 0x0 0x0 r1 op2
 
 ----------------------------------------
 -- move register to register
@@ -222,19 +212,9 @@ encode (Orr (Reg r1) (Reg r2) op2)
     in w1 .|. w2
 
 ----------------------------------------
--- load multiple registers
-encode (Stmea op1 (Mrg regs))
-  = encodeMReg 0x1 op1 regs
-
-----------------------------------------
 -- store register
 encode (Str (Reg r1) op2)
   = encodeLdrStr 0x1 0x1 r1 op2
-
-----------------------------------------
--- store register, unsigned byte
-encode (Strb (Reg r1) op2)
-  = encodeLdrStr 0x1 0x0 r1 op2
 
 ----------------------------------------
 -- add three registers

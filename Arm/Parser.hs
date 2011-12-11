@@ -291,15 +291,11 @@ pBlt   = ops1 "blt"   Blt
 pBne   = ops1 "bne"   Bne
 pCmp   = ops2 "cmp"   Cmp
 pEor   = ops3 "eor"   Eor
-pLdmea = ops2 "ldmea" Ldmea
 pLdr   = ops2 "ldr"   Ldr
-pLdrb  = ops2 "ldrb"  Ldrb
 pMov   = ops2 "mov"   Mov
 pMul   = ops3 "mul"   Mul
 pOrr   = ops3 "orr"   Orr
-pStmea = ops2 "stmea" Stmea
 pStr   = ops2 "str"   Str
-pStrb  = ops2 "strb"  Strb
 pSub   = ops3 "sub"   Sub
 pSwi   = ops1 "swi"   Swi
 
@@ -327,8 +323,8 @@ ops3 name instr
 ----------------------------------------------------------------------
 pInstr
   = pAdd +++ pAnd +++ pB   +++ pBeq   +++ pBgt   +++ pBic   +++ pBl   +++ pBlt
-         +++ pBne +++ pCmp +++ pEor   +++ pLdmea +++ pLdr   +++ pLdrb +++ pMov
-         +++ pMul +++ pOrr +++ pStmea +++ pStr   +++ pStrb  +++ pSub  +++ pSwi
+         +++ pBne +++ pCmp +++ pEor   +++ pLdr   +++ pMov
+         +++ pMul +++ pOrr +++ pStr   +++ pSub  +++ pSwi
          +++ pLabel
 
 
