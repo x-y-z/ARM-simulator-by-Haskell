@@ -19,6 +19,8 @@ import Control.Monad.State
 import Instruction
 import RegisterName
 
+import Test.QuickCheck
+import Test.HUnit
 
 type Debug = Bool
 
@@ -333,6 +335,18 @@ insertInCache c@(Cache l m) addr =
     idx = getIndex addr l
     tag = getTag addr l
 
+testDMCache :: Cache
+testDMCache = (Cache (CacheLevel 32768 32 1 10) Map.empty)
+
+testACache :: Cache
+testACache = (Cache (CacheLevel 32768 32 4 16) Map.empty)
+
+prop_dm_cache_insert :: Address -> Property
+prop_dm_cache_insert a = property $ inCache a (insertInCache testDMCache a)
+
+prop_a_cache_insert :: Address -> Property
+prop_a_cache_insert a = property $ inCache a (insertInCache testACache a)
+
 -- Doing lru replacement by just removing the first thing in the list
 insertInSet :: Set -> Word32 -> Set
 insertInSet s tag = if any (\(t,_) -> (tag == t)) s then s 
@@ -378,7 +392,7 @@ getTag :: Address -> CacheLevel -> Word32
 getTag addr c = shiftR addr (32 - (tagBits c))
 
 getIndex :: Address -> CacheLevel -> Word32
-getIndex addr c = a .&. mask
+getIndex addr c = a Data.Bits..&. mask
   where
     a    = shiftR addr (offsetBits c)
     mask = complement $ shiftL (complement (0 :: Word32)) (indexBits c)
@@ -386,3 +400,30 @@ getIndex addr c = a .&. mask
 getOffset :: Address -> CacheLevel -> Word32
 getOffset addr (CacheLevel _ b _ _) = addr `mod` (fromIntegral b)
 
+testCL :: CacheLevel
+testCL = CacheLevel 32768 32 1 10
+
+cacheTests :: Test
+cacheTests = TestList [ testOffset, testIndex, testTag ]
+
+testOffset :: Test
+testOffset = TestList [ getOffset 0x00000001 testCL ~?= 1, 
+                        getOffset 0x00000020 testCL ~?= 0 ]
+
+testIndex :: Test
+testIndex = TestList [ getIndex 0x00000020 testCL ~?= 1,
+                       getIndex 0x0000001F testCL ~?= 0,
+                       getIndex 0x00008000 testCL ~?= 0 ]
+            
+testTag :: Test
+testTag = TestList [ getTag 0x00008000 testCL ~?= 1 ]
+
+-- Check that 
+prop_address_bits :: Address -> Property
+prop_address_bits a = 
+  property $ (shiftL (getTag a c) ts) + 
+  (shiftL (getIndex a c) is) + getOffset a c == a
+  where
+    c = testCL
+    ts = (indexBits c) + is
+    is = offsetBits c
