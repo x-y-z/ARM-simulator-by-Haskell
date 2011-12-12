@@ -62,7 +62,7 @@ emptyAux = InO [] [] [] []
 
 data Auxilary = 
     Nil
-  | InO {fd :: [Word32], de :: [Instruction], em :: [(RegisterName,Address)], ew :: [(RegisterName,Address)]}
+  | InO {fd :: [Word32], de :: [Instruction], em :: [(RegisterName,Address)], ew :: [(Word32,Address)]}
   deriving Show
 
 queueLoad :: (MonadState CPU m, MonadIO m) => RegisterName -> Address -> m ()
@@ -82,15 +82,15 @@ getLoad = do (CPU _ _ _ _ aux) <- get
                                            return (Just x)
                  
 
-queueStore :: (MonadState CPU m, MonadIO m) => RegisterName -> Address -> m ()
-queueStore reg addr = do (CPU _ _ _ _ aux) <- get
+queueStore :: (MonadState CPU m, MonadIO m) => Word32 -> Address -> m ()
+queueStore val addr = do (CPU _ _ _ _ aux) <- get
                          case aux of
                            Nil -> fail "Need In-order auxilary data"
                            (InO fd de em ew) -> 
                              setAuxilary (InO fd de em 
-                                          (ew ++ [(reg,addr)]))
+                                          (ew ++ [(val,addr)]))
 
-getStore :: (MonadState CPU m, MonadIO m) => m (Maybe (RegisterName,Address))
+getStore :: (MonadState CPU m, MonadIO m) => m (Maybe (Word32,Address))
 getStore = do (CPU _ _ _ _ aux) <- get
               case aux of
                Nil -> fail "Need In-order auxilary data"

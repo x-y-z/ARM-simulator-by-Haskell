@@ -111,9 +111,7 @@ memWrite :: Stage
 memWrite = do st <- getStore
               case st of
                 Nothing -> return ()
-                Just (r,a) -> do v <- getReg r
-                                 writeMem a v
-                                 memWrite
+                Just (v,a) -> do writeMem a v
 
 simplePipe :: Pipeline
 simplePipe = [singleStage]

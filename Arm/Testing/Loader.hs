@@ -30,8 +30,8 @@ loadProgram program = let org    = origin program
           codeEnd <- loadInstructions org instrs
           setBoundM CodeS (org, codeEnd)
           loadConstants consts
-          let dataStart = if null consts then 0 else fst (head consts)
-          let dataEnd = if null consts then 0 else fst (last consts)
+          let dataStart = if null consts then (codeEnd + 4) else fst (head consts)
+          let dataEnd = if null consts then (codeEnd + 4) else fst (last consts)
           setBoundM DataS (dataStart, dataEnd)
           
 ----------------------------------------------------------------------

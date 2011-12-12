@@ -185,22 +185,23 @@ eval (Orr (Reg reg1) (Reg reg2) (Reg reg3))
 -- store register
 eval (Str (Reg reg1) op2)
   = do val <- getReg reg1
+       (bnd,_) <- getBoundM DataS
        case op2 of
          Ind reg2
            -> do addr <- getReg reg2
-                 writeMem addr val
+                 writeMem (addr + bnd) val
          Aut (Bas reg2 offset)
            -> do addr <- getReg reg2
-                 let addr' = addr + offset
+                 let addr' = (addr + bnd + offset)
                  writeMem addr' val
                  setReg reg2 addr'  -- write the address back into reg2
          Bas reg2 offset
            -> do addr <- getReg reg2
-                 writeMem (addr + offset) val
+                 writeMem (addr + bnd + offset) val
          Pos (Ind reg2) offset
            -> do addr <- getReg reg2
-                 writeMem addr val
-                 setReg reg2 (addr + offset)  -- write addr + offset back into reg2
+                 writeMem (addr + bnd) val
+                 setReg reg2 (addr + bnd + offset)  -- write addr + offset back into reg2
 
 -- subtract two registers
 eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
@@ -371,22 +372,24 @@ evalInO (Orr (Reg reg1) (Reg reg2) (Reg reg3))
 
 -- store register
 evalInO (Str (Reg reg1) op2)
-  = do case op2 of
+  = do val <- getReg reg1
+       (bnd,_) <- getBoundM DataS 
+       case op2 of
          Ind reg2
            -> do addr <- getReg reg2
-                 queueStore reg1 addr
+                 queueStore val (addr + bnd)
          Aut (Bas reg2 offset)
            -> do addr <- getReg reg2
-                 let addr' = addr + offset
-                 queueStore reg1 addr'
+                 let addr' = (addr + bnd + offset)
+                 queueStore val addr'
                  setReg reg2 addr'
          Bas reg2 offset
            -> do addr <- getReg reg2
-                 queueStore reg1 (addr + offset)
+                 queueStore val (addr + bnd + offset)
          Pos (Ind reg2) offset
            -> do addr <- getReg reg2
-                 queueStore reg1 addr
-                 setReg reg2 (addr + offset)
+                 queueStore val (addr + bnd)
+                 setReg reg2 (addr + bnd + offset)
 
 -- subtract two registers
 evalInO (Sub (Reg reg1) (Reg reg2) (Reg reg3))
