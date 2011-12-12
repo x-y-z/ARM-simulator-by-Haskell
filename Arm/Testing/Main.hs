@@ -104,7 +104,11 @@ runProgramN program pipe h n = do cpu <- (execStateT (loadProgram program)
                                           (CPU (emptyMem h) emptyRegs False
                                            emptyCounters emptyAux)) 
                                   cpu' <- execStateT startRunning cpu
-                                  execStateT (runStepN pipe n) cpu'
+                                  cpu'' <- execStateT (runStepN pipe n) cpu'
+                                  -- Need to clear out any remaining memory operations
+                                  cpu''' <- execStateT (memWrite) cpu''
+                                  execStateT (memRead) cpu'''
+                                  
 
 prop_exec :: Program -> Property
 prop_exec p = monadicIO $ do b <- Test.QuickCheck.Monadic.run $ checkProgram p

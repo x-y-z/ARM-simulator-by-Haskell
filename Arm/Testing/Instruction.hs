@@ -101,10 +101,10 @@ arbI = frequency [ (3, liftM3 Add arbReg arbReg arbReg ),
                    (2, liftM2 Mov arbReg arbReg),
                    (1, liftM3 Mul arbReg arbReg arbReg),
                    (1, liftM3 Orr arbReg arbReg arbReg), 
-                   (1, liftM2 Str arbReg arbInd),
-                   (1, liftM2 Str arbReg arbAut),
-                   (1, liftM2 Str arbReg arbBas),
-                   (1, liftM2 Str arbReg arbPos),
+             --      (1, liftM2 Str arbReg arbInd),
+              --     (1, liftM2 Str arbReg arbAut),
+             --      (1, liftM2 Str arbReg arbBas),
+             --      (1, liftM2 Str arbReg arbPos),
                    (1, liftM3 Sub arbReg arbReg arbReg) ]
   
 instance Arbitrary Instruction where

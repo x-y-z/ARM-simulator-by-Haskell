@@ -4,9 +4,9 @@ module CPU (Address, CPU(CPU), setReg, setBoundM, Segment(CodeS, DataS), writeMe
             Debug, getReg, stopRunning, readMem, cpsrGetZ, cpsrGetC, cpsrGetN, 
             cpsrSetN, cpsrSetZ, cpsrSetC, getDbg, flushPipeline, queueLoad,
             queueStore, Auxilary(Nil, InO), setAuxilary, getLoad, nextCycle, 
-            currentCycle, stallCycle, executedInstr, instrsExecuted, decodeFail, failedDecodes, getStore, isRunning, Hierarchy, emptyMem,
+            currentCycle, stallCycle, advanceCycle, stallForN, executedInstr, instrsExecuted, decodeFail, failedDecodes, getStore, isRunning, Hierarchy, emptyMem,
             emptyRegs, emptyCounters, emptyAux, startRunning, Memory(Mem), getBoundM,
-            showCPSRFlags, standardCache)
+            showCPSRFlags, standardCache, loadCache)
 where
   
 import Data.Map (Map)  
@@ -127,6 +127,10 @@ currentCycle = getCounter "Cycles"
 nextCycle :: (MonadState CPU m, MonadIO m) => m ()
 nextCycle = do cyc <- getCounter "Cycles"
                setCounter "Cycles" (cyc + 1)
+               
+advanceCycle :: (MonadState CPU m, MonadIO m) => Integer -> m ()
+advanceCycle n = do cyc <- getCounter "Cycles"
+                    setCounter "Cycles" (cyc + n)
 
 executedInstr :: (MonadState CPU m, MonadIO m) => m ()
 executedInstr = do is <- getCounter "ExecutedInstructions"
@@ -301,7 +305,6 @@ setMemWord addr val = do (CPU (Mem c l m) rs dbg cs aux) <- get
 
 readMem :: (MonadState CPU m, MonadIO m) => Address -> m Word32
 readMem byteAddr = do val <- getMemWord (wordAddress byteAddr)
-                      lat <- loadCache byteAddr
                       updateCache byteAddr
                       return val
     
@@ -322,7 +325,7 @@ buildHierarchy []     = []
 buildHierarchy (x:xs) = (Cache x Map.empty) : (buildHierarchy xs)
 
 standardCache :: Hierarchy
-standardCache = [(CacheLevel 32768 32 1 10), (CacheLevel 4194304 128 2 100)]
+standardCache = [(CacheLevel 32768 32 1 1), (CacheLevel 4194304 128 2 10)]
 
 -- Only determine if a block would be in the cache, simplify implementation by 
 -- not actually storing data there
@@ -378,7 +381,7 @@ latency (CacheLevel _ _ _ l) = l
 -- Simulate a load to the cache hierarchy and return the latency for this load
 loadCache :: (MonadState CPU m, MonadIO m) => Address -> m Integer
 loadCache addr = do (CPU (Mem c _ _) _ _ _ _) <- get
-                    return $ foldr f 1000 c
+                    return $ foldr f 100 c
   where
     f cache@(Cache lev ls) i = if inCache addr cache
                          then min (latency lev) i else i

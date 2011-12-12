@@ -139,16 +139,24 @@ eval (Ldr (Reg reg1) op2)
   = do val <- case op2 of
                 Ind reg2
                   -> do addr <- getReg reg2
+                        l <- loadCache addr
+                        advanceCycle l
                         readMem addr
                 Bas reg2 offset
                   -> do addr <- getReg reg2
+                        l <- loadCache (addr + offset)
+                        advanceCycle l
                         readMem (addr + offset)
                 Aut (Bas reg2 offset)
                   -> do addr <- getReg reg2
+                        l <- loadCache (addr + offset)
+                        advanceCycle l
                         setReg reg2 (addr + offset)  -- write the address back into reg2
                         readMem (addr + offset)
                 Pos (Ind reg2) offset
                   -> do addr <- getReg reg2
+                        l <- loadCache (addr + offset)
+                        advanceCycle l
                         setReg reg2 (addr + offset)  -- write addr + offset back into reg2
                         readMem addr
        setReg reg1 val

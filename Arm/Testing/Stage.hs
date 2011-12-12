@@ -31,16 +31,16 @@ fetch = do pc <- getReg R15
            cyc <- currentCycle
            sta <- stallCycle
            df  <- failedDecodes
-           if cyc >= sta then do opcode <- readMem pc
-                                 if opcode == 0 then 
-                                   do setReg R15 (pc + 4)
-                                      decodeFail
-                                      if df > 10 then
-                                        do stopRunning
-                                           return ()
-                                        else return ()
-                                   else do setFD opcode
-                                           setReg R15 (pc + 4) 
+           if cyc > sta then do opcode <- readMem pc
+                                if opcode == 0 then 
+                                  do setReg R15 (pc + 4)
+                                     decodeFail
+                                     if df > 10 then
+                                       do stopRunning
+                                          return ()
+                                       else return ()
+                                  else do setFD opcode
+                                          setReg R15 (pc + 4) 
              else return ()
 
 
@@ -70,28 +70,41 @@ getDE = do (CPU _ _ _ _ a) <- get
                               return (Just x)
 
 decode :: Stage
-decode = do opcode <- getFD
-            case opcode of
-              Nothing -> return ()
-              Just op -> case (Decoder.decode op) of
-                Nothing -> fail "Unable to decode"
-                Just i -> do setDE i
+decode = do cyc <- currentCycle
+            sta <- stallCycle
+            if cyc >= sta then
+              do opcode <- getFD
+                 case opcode of
+                   Nothing -> return ()
+                   Just op -> case (Decoder.decode op) of
+                     Nothing -> fail "Unable to decode"
+                     Just i -> do setDE i 
+              else return ()
 
 execute :: Stage
-execute = do instr <- getDE
-             case instr of
-               Nothing -> return ()
-               Just i -> do evalInO i
-                            executedInstr
+execute = do cyc <- currentCycle
+             sta <- stallCycle
+             if cyc >= sta then
+               do instr <- getDE
+                  case instr of
+                    Nothing -> return ()
+                    Just i -> do evalInO i
+                                 executedInstr
+               else return ()
              
 -- We need a recursive call to this function to handle multiple reads
 memRead :: Stage
 memRead = do ld <- getLoad
              case ld of
                Nothing -> return ()
-               Just (r,a) -> do v <- readMem a
-                                setReg r v
-                                memRead
+               Just (r,a) -> do l <- loadCache a
+                                if l > 1 then
+                                  do stallForN l
+                                     v <- readMem a
+                                     setReg r v
+                                  else
+                                  do v <- readMem a
+                                     setReg r v
 
 -- We need a recursive call to this function to handle multiple writes
 memWrite :: Stage
