@@ -18,7 +18,7 @@ line = "----------------------------------------"
 ----------------------------------------------------------------------
 -- Software interrupt services.
 ----------------------------------------------------------------------
-swi :: (MonadState CPU m, MonadIO m) => Word32 -> Bool -> m ()
+swi :: (MonadState CPU m, MonadIO m) => Word32 -> Debug -> m ()
 
 -- display character in R0
 swi 0 debug

@@ -20,7 +20,7 @@ inOrder :: Pipeline
 inOrder = [memWrite,memRead,execute,decode,fetch]
 
 setFD :: (MonadState CPU m, MonadIO m) => Word32 -> m ()
-setFD i = do (CPU _ _ _ a) <- get
+setFD i = do (CPU _ _ _ _ a) <- get
              case a of
                   Nil -> fail "Need In-Order auxilary data"
                   (InO fd de em ew) -> setAuxilary (InO (i : fd) de em ew)
@@ -36,8 +36,9 @@ fetch = do pc <- getReg R15
                                            setReg R15 (pc + 4) 
              else return ()
 
+
 getFD :: (MonadState CPU m, MonadIO m) => m (Maybe Word32)
-getFD = do (CPU _ _ _ a) <- get
+getFD = do (CPU _ _ _ _ a) <- get
            case a of
              Nil -> fail "Need In-Order auxilary data"
              (InO fd de em ew) -> case fd of
@@ -46,13 +47,14 @@ getFD = do (CPU _ _ _ a) <- get
                               return (Just x)
 
 setDE :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
-setDE i = do (CPU _ _ _ a) <- get
+setDE i = do (CPU _ _ _ _ a) <- get
              case a of
                Nil -> fail "Need In-Order auxilary data"
                (InO fd de em ew) -> setAuxilary (InO fd (i : de) em ew)
 
+
 getDE :: (MonadState CPU m, MonadIO m) => m (Maybe Instruction)
-getDE = do (CPU _ _ _ a) <- get
+getDE = do (CPU _ _ _ _ a) <- get
            case a of
              Nil -> fail "Need In-Order auxilary data"
              (InO fd de em ew) -> case de of

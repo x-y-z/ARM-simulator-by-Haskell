@@ -294,8 +294,9 @@ eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
 
 -- software interrupt
 eval (Swi (Con isn))
-  -- do dbg <- readIORef (debug cpu)
-   = swi isn False
+ = do cpu <- get
+      let dbg = getDbg cpu
+      swi isn dbg
 
 
 evalInO :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
