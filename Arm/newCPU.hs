@@ -70,6 +70,9 @@ class (Ord seg, Eq seg, Show seg) => CMemLayout map seg bound where
 
 
 
+class (CDebug dbg, CRegisters rmap rname rval, CMemLayout lmap lseg lbnd, CMemData mmap maddr mdata) => CCPU ccpu mmap maddr mdata lmap lseg lbnd rmap rname rval dbg where
+      
+
 
 --  instance of all stuffs
 
@@ -224,6 +227,10 @@ getOffset addr (CacheLevel _ b _ _) = addr `mod` (fromIntegral b)
 
 
 
+
+
+
+    
 -- =======CPU==========
 data CPU = CPU Memory Registers Debug 
 

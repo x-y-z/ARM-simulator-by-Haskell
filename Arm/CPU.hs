@@ -1,6 +1,12 @@
 {-#OPTIONS  -XFlexibleContexts #-}
 
-module CPU
+module CPU (Address, CPU(CPU), setReg, setBoundM, Segment(CodeS, DataS), writeMem,
+            Debug, getReg, stopRunning, readMem, cpsrGetZ, cpsrGetC, cpsrGetN, 
+            cpsrSetN, cpsrSetZ, cpsrSetC, getDbg, flushPipeline, queueLoad,
+            queueStore, Auxilary(Nil, InO), setAuxilary, getLoad, nextCycle, 
+            currentCycle, stallCycle, getStore, isRunning, Hierarchy, emptyMem,
+            emptyRegs, emptyCounters, emptyAux, startRunning, Memory(Mem), getBoundM,
+            showCPSRFlags, standardCache)
 where
   
 import Data.Map (Map)  
