@@ -1,4 +1,4 @@
-{-#OPTIONS -XMultiParamTypeClasses -XTypeSynonymInstances -XFlexibleContexts -XFunctionalDependencies#-}
+{-#OPTIONS -XMultiParamTypeClasses -XTypeSynonymInstances -XFlexibleContexts -XFunctionalDependencies -XFlexibleInstances#-}
 
 module CPU where
 
@@ -79,27 +79,27 @@ class (CSet set line tag valid) => CCacheData cdata idx set line tag valid
       |cdata->set, cdata->line, cdata->tag, cdata->valid, cdata->idx where
 
       insertInCacheData_ :: cdata -> idx -> tag -> cdata
-      inCache :: addr -> cdata -> Bool
+      inCacheData_ :: idx -> tag -> cdata -> Bool
+      emptyCacheData_ :: cdata
 
-class CCacheLevel cl struct|cl->struct where
-      stdL1Cache :: cl
-      stdL2Cache :: cl
-      latency :: cl -> Integer
-      offsetBits :: cl -> Int
-      indexBits :: cl -> Int
-      tagBits :: cl -> Int
-      getTag :: addr -> cl -> tag
-      getIndex :: addr -> cl -> index
-      getOffset :: addr -> cl -> offset
+class CCacheLevel cl struct addr|cl->struct, cl->addr where
+      stdL1Cache_ :: cl
+      stdL2Cache_ :: cl
+      latency_ :: cl -> Integer
+      offsetBits_ :: cl -> Int
+      indexBits_ :: cl -> Int
+      tagBits_ :: cl -> Int
+      getTag_ :: addr -> cl -> addr
+      getIndex_ :: addr -> cl -> addr
+      getOffset_ :: addr -> cl -> addr
 
-class (CCacheData cdata idx set line tag valid, CCacheLevel cl struct) =>
-       CCache cache cl cdata idx set line tag valid struct
+class (CCacheData cdata idx set line tag valid, CCacheLevel cl struct addr) =>
+       CCache cache cl cdata addr idx set line tag valid struct
        |cache->cl, cache->cdata, cache->idx, cache->set, cache->line, cache->tag, 
-       cache->valid, cache->struct where
+       cache->valid, cache->struct, cache->addr where
         
       insertInCache_ :: cache -> addr -> cache
-      loadCache :: cache -> addr -> Integer 
-      updateCache :: cache -> addr -> cache     
+      inCache_ :: cache -> addr -> Bool
 
 
 class (CDebug dbg, CRegisters rs rn rd, 
@@ -173,13 +173,25 @@ instance CMemLayout MemLayout Segment Bound where
 
 type Line = (Word32, Bool)
 type Set = [Line]
+type CacheData = Map Word32 Set
+-- CacheLevel Size Block-Size Associativity Latency
+type CacheStruct = (Integer, Integer, Integer, Integer)
+data CacheLevel = CacheLevel CacheStruct
+  deriving Show
+data Cache = Cache CacheLevel CacheData deriving Show
 
---class CLine line tag valid|line->tag, line->valid
+type Hierarchy = [CacheLevel]
+type CacheHierarchy = [Cache]
+
+buildHierarchy :: Hierarchy -> CacheHierarchy
+buildHierarchy []     = []
+buildHierarchy (x:xs) = (Cache x emptyCacheData_): (buildHierarchy xs)
+
+standardCache :: Hierarchy
+standardCache = [stdL1Cache_, stdL2Cache_]
+
 instance CLine Line Word32 Bool   
     
---class (CLine line tag valid) => CSet set line tag valid
---      |set->line, set->tag, set->valid where
---      insertInSet_ :: set -> tag -> set
 instance CSet Set Line Word32 Bool where
          insertInSet_ s tag = if any (\(t, _) -> tag == t) s then s
                                  else aux s tag
@@ -187,33 +199,45 @@ instance CSet Set Line Word32 Bool where
                   aux (l:ls) t = ls ++ [(t,False)] -- this causes LRU replacement      
 
 
---class (CSet set line tag valid) => CCacheData cdata idx set line tag valid
---      |cdata->set, cdata->line, cdata->tag, cdata->valid, cdata->idx where
 
---      insertInCacheData_ :: cdata -> idx -> tag -> cdata
---      inCache :: addr -> cdata -> Bool
+instance CCacheData CacheData Word32 Set Line Word32 Bool where
+         insertInCacheData_ cdata idx tag 
+           = if Map.member idx cdata 
+             then let set = cdata Map.! idx
+                  in Map.insert idx (insertInSet_ set tag) cdata
+             else Map.insert idx (insertInSet_ [] tag) cdata
+         inCacheData_ idx tag cdata = (Map.member idx cdata) && 
+                                      (any (\(t, _) -> t == tag) lns)
+           where lns = cdata Map.! idx  -- is this OK? If idx is not in cdata
+         emptyCacheData_ = Map.empty
 
 
+instance CCacheLevel CacheLevel CacheStruct Word32 where
+         stdL1Cache_ = CacheLevel (32768,32,1,10)
+         stdL2Cache_ = CacheLevel (4194304,128,2,100)
+         latency_ (CacheLevel (_,_,_,l)) = l
+         offsetBits_ (CacheLevel (_,b,_,_)) = round $ logBase 2 (fromInteger b)
+         indexBits_ (CacheLevel (si,bi,ai,_)) = round $ logBase 2 (s / (b * a))
+           where s = fromInteger si
+                 b = fromInteger bi
+                 a = fromInteger ai 
+         tagBits_ c = 32 - (indexBits_ c) - (offsetBits_ c)
+         getTag_ addr c = shiftR addr (32 - (tagBits_ c))
+         getIndex_ addr c = a .&. mask
+            where a = shiftR addr (offsetBits_ c)
+                  mask = complement $ shiftL (complement (0::Word32)) (indexBits_ c)
+         getOffset_ addr  (CacheLevel (_,b,_,_)) = addr `mod` (fromIntegral b)
+          
 
-{-class CCacheLevel cl struct|cl->struct where
-      stdL1Cache :: cl
-      stdL2Cache :: cl
-      latency :: cl -> Integer
-      offsetBits :: cl -> Int
-      indexBits :: cl -> Int
-      tagBits :: cl -> Int
-      getTag :: addr -> cl -> tag
-      getIndex :: addr -> cl -> index
-      getOffset :: addr -> cl -> offset-}
 
-{-class (CCacheData cdata idx set line tag valid, CCacheLevel cl struct) =>
-       CCache cache cl cdata idx set line tag valid struct
-       |cache->cl, cache->cdata, cache->idx, cache->set, cache->line, cache->tag, 
-       cache->valid, cache->struct where
-        
-      insertInCache_ :: cache -> addr -> cache
-      loadCache :: cache -> addr -> Integer 
-      updateCache :: cache -> addr -> cache     -}
+instance CCache Cache CacheLevel CacheData Word32 Word32 Set Line Word32 Bool CacheStruct where
+         insertInCache_ c@(Cache l m) addr = (Cache l (insertInCacheData_ m idx tag))
+           where idx = getIndex_ addr l
+                 tag = getTag_ addr l
+         inCache_ (Cache lev st) addr = inCacheData_ idx tag st
+           where idx = getIndex_ addr lev
+                 tag = getTag_ addr lev
+
 
 
 -- in CPU class, loadCache and updateCache needed
