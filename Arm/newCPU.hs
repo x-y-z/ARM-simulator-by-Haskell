@@ -1,4 +1,4 @@
-{-#OPTIONS -XMultiParamTypeClasses -XTypeSynonymInstances -XFlexibleContexts -XFunctionalDependencies -XFlexibleInstances#-}
+{-#OPTIONS -XMultiParamTypeClasses -XTypeSynonymInstances -XFlexibleContexts -XFunctionalDependencies -XFlexibleInstances -XUndecidableInstances#-}
 
 module CPU where
 
@@ -106,6 +106,8 @@ class (CCache cache cl cdata addr idx set line tag valid struct) =>
       | ch->cache, ch->cl where
       buildHierarchy :: [cl] -> ch
       standardCache :: [cl]
+      hasCache :: ch -> Bool 
+      hasCache _ = False
 
 class (CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct, 
        CMemData memdata addr datum, CMemLayout memlayout seg bnd) =>
@@ -113,7 +115,7 @@ class (CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct,
                set line tag valid struct datum seg bnd
        |memory->ch, memory->memlayout, memory->memdata
 
-class CCounter cnt name val where
+class CCounter cnt name val|cnt->name, cnt->val where
       getCounter_ :: cnt -> name -> val
       setCounter_ :: cnt -> name -> val -> cnt
       emptyCounters_ :: cnt
@@ -121,7 +123,7 @@ class CCounter cnt name val where
 
 
 -- temporary CPU, revision needed
-class (CDebug dbg, CRegisters rs rn rd, 
+{-class (CDebug dbg, CRegisters rs rn rd, 
        CMemData md maddr mdata, CMemLayout ml mseg mbnd)=>
      CCPU cpu dbg rs md ml rn rd maddr mdata mseg mbnd
      |cpu -> dbg, cpu -> rs, cpu -> md, cpu -> ml where
@@ -129,7 +131,59 @@ class (CDebug dbg, CRegisters rs rn rd,
       
 data CPU = CPU MemData MemLayout Debug Registers Auxilary
 
-instance CCPU CPU Debug Registers MemData MemLayout RegisterName Word32 Word32 Word32 Segment Bound where
+instance CCPU CPU Debug Registers MemData MemLayout RegisterName Word32 Word32 Word32 Segment Bound where-}
+
+class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx 
+       set line tag valid struct datum seg bnd, CRegisters reg rname rval,  
+       CCounter cnt cname cval, MonadState cpu m, MonadIO m) => 
+       CCPU cpu memory reg dbg cnt ch memlayout memdata cache cl cdata addr idx 
+       set line tag valid struct datum seg bnd rname rval cname cval m
+       |cpu->memory, cpu->reg, cpu->dbg, cpu->cnt, cpu->m where
+-- cpu
+       getRegFile :: cpu -> reg
+       setRegFile :: cpu -> reg -> cpu
+       getMem :: cpu -> memory
+       setMem :: cpu -> memory -> cpu
+       getDbg :: cpu -> dbg
+       setDbg :: cpu -> dbg -> cpu
+       getCnt :: cpu -> cnt
+       setCnt :: cpu -> cnt -> cpu
+       getAux :: cpu -> Auxilary         -- ad hoc function
+       setAux :: cpu -> Auxilary -> cpu  -- ad hoc function
+-- registers
+       getReg :: rname -> m rval
+       getReg regname = do c <- get
+                           return $ getReg_ (getRegFile c) regname
+       setReg :: rname -> rval -> m ()
+       cpsrGet :: Int -> m rval
+       cpsrSet :: Int -> m ()
+-- memory
+       setBound :: seg -> bnd -> m ()
+       setBound s b = do cpu <- get
+                         return ()
+       getBound :: seg -> m bnd
+
+
+-- registers
+       cpsrGetN, cpsrGetZ, cpsrGetC, cpsrGetV :: m rval
+       cpsrGetN = cpsrGet 31
+       cpsrGetZ = cpsrGet 30
+       cpsrGetC = cpsrGet 29
+       cpsrGetV = cpsrGet 28
+       cpsrSetN, cpsrSetZ, cpsrSetC, cpsrSetV :: m ()
+       cpsrSetN = cpsrSet 31
+       cpsrSetZ = cpsrSet 30
+       cpsrSetC = cpsrSet 29
+       cpsrSetV = cpsrSet 28
+       showCPSRFlags :: m ()
+       showCPSRFlags = do n <- cpsrGetN
+                          z <- cpsrGetZ
+                          c <- cpsrGetC
+                          v <- cpsrGetV
+                          liftIO $ putStr ("N=" ++ show n ++ 
+                                           " Z=" ++ show z ++ 
+                                           " C=" ++ show c ++ 
+                                           " V=" ++ show v)
 
 
 --  instance of all stuffs
@@ -267,6 +321,7 @@ instance CCacheHierarchy CacheHierarchy Cache CacheLevel CacheData Word32 Word32
          buildHierarchy (x:xs) = (Cache x emptyCacheData_): (buildHierarchy xs)
 
          standardCache = [stdL1Cache_, stdL2Cache_]
+         hasCache _ = True
 
 
 type Counters = Map String Integer
@@ -299,3 +354,25 @@ data Auxilary =
     Nil
   | InO {fd :: [Word32], de :: [Instruction], em :: [(RegisterName,Address)], ew :: [(RegisterName,Address)]}
   deriving Show
+
+
+
+data CPU = CPU Memory Registers Debug Counters Auxilary
+{- MonadState cpu m, MonadIO m) => 
+       CCPU cpu memory reg dbg cnt ch memlayout memdata cache cl cdata addr idx 
+       set line tag valid struct datum seg bnd rname rval cname cval m-}
+instance  (MonadState CPU m, MonadIO m) => 
+          CCPU CPU Memory Registers Debug Counters CacheHierarchy MemLayout MemData
+              Cache CacheLevel CacheData Word32 Word32 Set Line Word32 Bool 
+              CacheStruct Word32 Segment Bound RegisterName Word32 String Integer m
+
+
+{-
+type CacheDummy = Int
+
+instance CCacheHierarchy CacheDummy undefined undefined undefined undefined undefined 
+         undefined undefined undefined undefined undefined where
+         buildHierarchy = undefined
+         standardCache = undefined
+         hasCache _ = True
+-}
