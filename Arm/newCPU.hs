@@ -1,4 +1,4 @@
-{-#OPTIONS -XMultiParamTypeClasses -XTypeSynonymInstances -XFlexibleContexts#-}
+{-#OPTIONS -XMultiParamTypeClasses -XTypeSynonymInstances -XFlexibleContexts -XFunctionalDependencies#-}
 
 module CPU where
 
@@ -23,15 +23,15 @@ class CDebug dbg where
 -- operations. For CPU, we will define it as below, bring the definition
 -- of monad m at the same time.
 
-class (Ord name, Show val) => CRegisters map name val where
-      emptyRegs_ :: map name val
-      getReg_ :: map name val -> name -> val
-      setReg_ :: map name val -> name -> val ->  map name val
-      cpsrGet_ :: map name val -> Int -> val
-      cpsrSet_ :: map name val -> Int -> map name val
+class (Ord name, Show val) => CRegisters reg name val|reg->name, reg->val where
+      emptyRegs_ :: reg
+      getReg_ :: reg -> name -> val
+      setReg_ :: reg -> name -> val -> reg
+      cpsrGet_ :: reg -> Int -> val
+      cpsrSet_ ::reg -> Int -> reg
 
-      cpsrGetN_, cpsrGetZ_, cpsrGetC_, cpsrGetV_ :: map name val -> val
-      cpsrSetN_, cpsrSetZ_, cpsrSetC_, cpsrSetV_:: map name val -> map name val
+      cpsrGetN_, cpsrGetZ_, cpsrGetC_, cpsrGetV_ :: reg -> val
+      cpsrSetN_, cpsrSetZ_, cpsrSetC_, cpsrSetV_:: reg -> reg
       
       cpsrGetN_ rs = cpsrGet_ rs 31
       cpsrSetN_ rs = cpsrSet_ rs 31
@@ -45,7 +45,7 @@ class (Ord name, Show val) => CRegisters map name val where
       cpsrGetV_ rs = cpsrGet_ rs 28
       cpsrSetV_ rs = cpsrSet_ rs 28
       
-      showCPSRFlags_ :: map name val -> IO ()           
+      showCPSRFlags_ :: reg -> IO ()           
       showCPSRFlags_ rs = let n = cpsrGetN_ rs
                               z = cpsrGetZ_ rs
                               c = cpsrGetC_ rs
@@ -55,22 +55,57 @@ class (Ord name, Show val) => CRegisters map name val where
                                     " C=" ++ show c ++ 
                                     " V=" ++ show v)
 
-class (Ord addr, Show datum) => CMemData map addr datum where
-      emptyMem_ :: map addr datum
+class (Ord addr, Show datum) => CMemData mem addr datum|mem->addr, mem->datum where
+      emptyMem_ ::mem
       align_ :: addr -> addr
-      getMemWord_ :: map addr datum -> addr -> datum
-      setMemWord_ :: map addr datum -> addr -> datum -> map addr datum
+      getMemWord_ :: mem -> addr -> datum
+      setMemWord_ :: mem -> addr -> datum -> mem
       
 
 
-class (Ord seg, Eq seg, Show seg) => CMemLayout map seg bound where
-      initMemLayout_ :: map seg bound
-      getBound_ :: map seg bound -> seg -> bound
-      setBound_ :: map seg bound -> seg -> bound -> map seg bound
+class (Ord seg, Eq seg, Show seg) => CMemLayout lyt seg bnd|lyt->seg, lyt->bnd where
+      initMemLayout_ :: lyt
+      getBound_ :: lyt -> seg -> bnd
+      setBound_ :: lyt -> seg -> bnd -> lyt
 
 
+class CLine line tag valid|line->tag, line->valid
+      
+class (CLine line tag valid) => CSet set line tag valid
+      |set->line, set->tag, set->valid where
+      insertInSet_ :: set -> tag -> set
+      
+class (CSet set line tag valid) => CCacheData cdata idx set line tag valid
+      |cdata->set, cdata->line, cdata->tag, cdata->valid, cdata->idx where
 
-class (CDebug dbg, CRegisters rmap rname rval, CMemLayout lmap lseg lbnd, CMemData mmap maddr mdata) => CCPU ccpu mmap maddr mdata lmap lseg lbnd rmap rname rval dbg where
+      insertInCacheData_ :: cdata -> idx -> tag -> cdata
+      inCache :: addr -> cdata -> Bool
+
+class CCacheLevel cl struct|cl->struct where
+      stdL1Cache :: cl
+      stdL2Cache :: cl
+      latency :: cl -> Integer
+      offsetBits :: cl -> Int
+      indexBits :: cl -> Int
+      tagBits :: cl -> Int
+      getTag :: addr -> cl -> tag
+      getIndex :: addr -> cl -> index
+      getOffset :: addr -> cl -> offset
+
+class (CCacheData cdata idx set line tag valid, CCacheLevel cl struct) =>
+       CCache cache cl cdata idx set line tag valid struct
+       |cache->cl, cache->cdata, cache->idx, cache->set, cache->line, cache->tag, 
+       cache->valid, cache->struct where
+        
+      insertInCache_ :: cache -> addr -> cache
+      loadCache :: cache -> addr -> Integer 
+      updateCache :: cache -> addr -> cache     
+
+
+class (CDebug dbg, CRegisters rs rn rd, 
+       CMemData md maddr mdata, CMemLayout ml mseg mbnd)=>
+     CCPU cpu dbg rs md ml rn rd maddr mdata mseg mbnd
+     |cpu -> dbg, cpu -> rs, cpu -> md, cpu -> ml
       
 
 
@@ -89,7 +124,8 @@ instance CDebug Debug  where
      setDbg_ (D _) = D True
      clrDbg_ (D _) = D False
 
-instance CRegisters Map RegisterName Word32  where
+
+instance CRegisters Registers RegisterName Word32  where
          emptyRegs_ = Map.fromList[(R0,0), (R1,0), (R2,0),
                                   (R3,0), (R4,0), (R5,0),
                                   (R6,0), (R7,0), (R8,0),
@@ -111,7 +147,7 @@ type ByteAddress = Address
 
 type MemData = Map WordAddress Word32
 
-instance CMemData Map WordAddress Word32 where
+instance CMemData MemData WordAddress Word32 where
          emptyMem_ = Map.empty
          align_ addr = (addr `div` 4) * 4
          getMemWord_ mem addr = if Map.member addr mem
@@ -125,7 +161,7 @@ data Bound = Bound {lowerB :: Address,
 
 type MemLayout = Map Segment Bound
 
-instance CMemLayout Map Segment Bound where
+instance CMemLayout MemLayout Segment Bound where
          initMemLayout_ = Map.fromList [(CodeS, Bound 0 0), (DataS, Bound 0 0), 
                                        (StackS, Bound 0 0), (HeapS, Bound 0 0)]
          getBound_ mly seg = case (Map.lookup seg mly) of
@@ -135,106 +171,54 @@ instance CMemLayout Map Segment Bound where
                                       Just _ -> Map.insert seg bnd mly
                                       Nothing          -> error "segment fault"
 
+type Line = (Word32, Bool)
+type Set = [Line]
+
+--class CLine line tag valid|line->tag, line->valid
+instance CLine Line Word32 Bool   
+    
+--class (CLine line tag valid) => CSet set line tag valid
+--      |set->line, set->tag, set->valid where
+--      insertInSet_ :: set -> tag -> set
+instance CSet Set Line Word32 Bool where
+         insertInSet_ s tag = if any (\(t, _) -> tag == t) s then s
+                                 else aux s tag
+            where aux []     t = [(t, False)]
+                  aux (l:ls) t = ls ++ [(t,False)] -- this causes LRU replacement      
+
+
+--class (CSet set line tag valid) => CCacheData cdata idx set line tag valid
+--      |cdata->set, cdata->line, cdata->tag, cdata->valid, cdata->idx where
+
+--      insertInCacheData_ :: cdata -> idx -> tag -> cdata
+--      inCache :: addr -> cdata -> Bool
+
+
+
+{-class CCacheLevel cl struct|cl->struct where
+      stdL1Cache :: cl
+      stdL2Cache :: cl
+      latency :: cl -> Integer
+      offsetBits :: cl -> Int
+      indexBits :: cl -> Int
+      tagBits :: cl -> Int
+      getTag :: addr -> cl -> tag
+      getIndex :: addr -> cl -> index
+      getOffset :: addr -> cl -> offset-}
+
+{-class (CCacheData cdata idx set line tag valid, CCacheLevel cl struct) =>
+       CCache cache cl cdata idx set line tag valid struct
+       |cache->cl, cache->cdata, cache->idx, cache->set, cache->line, cache->tag, 
+       cache->valid, cache->struct where
+        
+      insertInCache_ :: cache -> addr -> cache
+      loadCache :: cache -> addr -> Integer 
+      updateCache :: cache -> addr -> cache     -}
 
 
 -- in CPU class, loadCache and updateCache needed
 data Memory = Mem { layout :: MemLayout,
                     mem :: MemData} deriving Show
 
--- CacheLevel Size Block-Size Associativity Latency
-data CacheLevel = CacheLevel Integer Integer Integer Integer
-  deriving Show
 
-type Hierarchy = [CacheLevel]
-
-type CacheHierarchy = [Cache]
-
-buildHierarchy :: Hierarchy -> CacheHierarchy
-buildHierarchy []     = []
-buildHierarchy (x:xs) = (Cache x Map.empty) : (buildHierarchy xs)
-
-standardCache :: Hierarchy
-standardCache = [(CacheLevel 32768 32 1 10), (CacheLevel 4194304 128 2 100)]
-
--- Only determine if a block would be in the cache, simplify implementation by 
--- not actually storing data there
-type Line = (Word32,Bool)
-
-type Set = [Line]
-
--- Cache CacheLevel Latency (Map Index [(Tag,Dirty,Word32)])
-data Cache = Cache CacheLevel (Map Word32 Set)
-  deriving Show
-
-    
-insertInCache :: Cache -> Address -> Cache
-insertInCache c@(Cache l m) addr = 
-  if Map.member idx m then 
-    let set = m Map.! idx in
-    (Cache l (Map.insert idx (insertInSet set tag) m))
-  else (Cache l (Map.insert idx (insertInSet [] tag) m))
-  where
-    idx = getIndex addr l
-    tag = getTag addr l
-
--- Doing lru replacement by just removing the first thing in the list
-insertInSet :: Set -> Word32 -> Set
-insertInSet s tag = if any (\(t,_) -> (tag == t)) s then s 
-                        else aux s tag
-  where
-    aux []     t = [(t,False)]
-    aux (l:ls) t = ls ++ [(t,False)]
-
-latency :: CacheLevel -> Integer
-latency (CacheLevel _ _ _ l) = l
-
-
-                                                       
-inCache :: Address -> Cache -> Bool
-inCache addr (Cache lev st) = (Map.member idx st) && 
-                              (any (\(t,_) -> t == tag) lns)
-  where
-    idx = getIndex addr lev
-    tag = getTag addr lev
-    lns = st Map.! idx
-
-offsetBits :: CacheLevel -> Int
-offsetBits (CacheLevel _ b _ _) = round $ logBase 2 (fromInteger b)
-
-indexBits :: CacheLevel -> Int
-indexBits (CacheLevel si bi ai _) = round $ logBase 2 (s / (b * a))
-  where
-    s = fromInteger si
-    b = fromInteger bi
-    a = fromInteger ai
-
--- Using 32 bit addresses
-tagBits :: CacheLevel -> Int
-tagBits c = 32 - (indexBits c) - (offsetBits c)
-
-getTag :: Address -> CacheLevel -> Word32
-getTag addr c = shiftR addr (32 - (tagBits c))
-
-getIndex :: Address -> CacheLevel -> Word32
-getIndex addr c = a .&. mask
-  where
-    a    = shiftR addr (offsetBits c)
-    mask = complement $ shiftL (complement (0 :: Word32)) (indexBits c)
-    
-getOffset :: Address -> CacheLevel -> Word32
-getOffset addr (CacheLevel _ b _ _) = addr `mod` (fromIntegral b)
-
-
-
-
-
-
-
-    
--- =======CPU==========
-data CPU = CPU Memory Registers Debug 
-
-setReg :: (MonadState CPU m, MonadIO m) => RegisterName -> Word32 -> m ()
-setReg id val = do (CPU mem rs dbg) <- get
-                   put (CPU mem (setReg_ rs id val) dbg)
 
