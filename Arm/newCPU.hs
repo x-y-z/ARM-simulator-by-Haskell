@@ -101,12 +101,35 @@ class (CCacheData cdata idx set line tag valid, CCacheLevel cl struct addr) =>
       insertInCache_ :: cache -> addr -> cache
       inCache_ :: cache -> addr -> Bool
 
+class (CCache cache cl cdata addr idx set line tag valid struct) => 
+      CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct
+      | ch->cache, ch->cl where
+      buildHierarchy :: [cl] -> ch
+      standardCache :: [cl]
 
+class (CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct, 
+       CMemData memdata addr datum, CMemLayout memlayout seg bnd) =>
+       CMemory memory ch memlayout memdata cache cl cdata addr idx 
+               set line tag valid struct datum seg bnd
+       |memory->ch, memory->memlayout, memory->memdata
+
+class CCounter cnt name val where
+      getCounter_ :: cnt -> name -> val
+      setCounter_ :: cnt -> name -> val -> cnt
+      emptyCounters_ :: cnt
+
+
+
+-- temporary CPU, revision needed
 class (CDebug dbg, CRegisters rs rn rd, 
        CMemData md maddr mdata, CMemLayout ml mseg mbnd)=>
      CCPU cpu dbg rs md ml rn rd maddr mdata mseg mbnd
-     |cpu -> dbg, cpu -> rs, cpu -> md, cpu -> ml
+     |cpu -> dbg, cpu -> rs, cpu -> md, cpu -> ml where
+     getAuxilary :: cpu -> Auxilary
       
+data CPU = CPU MemData MemLayout Debug Registers Auxilary
+
+instance CCPU CPU Debug Registers MemData MemLayout RegisterName Word32 Word32 Word32 Segment Bound where
 
 
 --  instance of all stuffs
@@ -183,12 +206,7 @@ data Cache = Cache CacheLevel CacheData deriving Show
 type Hierarchy = [CacheLevel]
 type CacheHierarchy = [Cache]
 
-buildHierarchy :: Hierarchy -> CacheHierarchy
-buildHierarchy []     = []
-buildHierarchy (x:xs) = (Cache x emptyCacheData_): (buildHierarchy xs)
 
-standardCache :: Hierarchy
-standardCache = [stdL1Cache_, stdL2Cache_]
 
 instance CLine Line Word32 Bool   
     
@@ -238,11 +256,46 @@ instance CCache Cache CacheLevel CacheData Word32 Word32 Set Line Word32 Bool Ca
            where idx = getIndex_ addr lev
                  tag = getTag_ addr lev
 
+{-class (CCache cache cl cdata addr idx set line tag valid struct) => 
+      CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct
+      | ch->cache, ch->cl where
+      buildHierarchy :: [cl] -> ch
+      standardCache :: [cl]-}
+instance CCacheHierarchy CacheHierarchy Cache CacheLevel CacheData Word32 Word32 Set
+         Line Word32 Bool CacheStruct where
+         buildHierarchy []     = []
+         buildHierarchy (x:xs) = (Cache x emptyCacheData_): (buildHierarchy xs)
 
+         standardCache = [stdL1Cache_, stdL2Cache_]
+
+
+type Counters = Map String Integer
+
+{-class CCounter cnt name val where
+      getCounter_ :: cnt -> name -> val
+      setCounter_ :: cnt -> name -> val -> cnt-}
+instance CCounter Counters String Integer where
+         emptyCounters_ = Map.fromList [("StallUntil", 0),("Cycles", 0)]
+         getCounter_ cnt id = if Map.member id cnt
+                              then cnt Map.! id
+                              else 0
+         setCounter_ cnt id val = Map.insert id val cnt
 
 -- in CPU class, loadCache and updateCache needed
-data Memory = Mem { layout :: MemLayout,
+data Memory = Mem { cache :: CacheHierarchy,
+                    layout :: MemLayout,
                     mem :: MemData} deriving Show
 
+{-class (CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct, 
+       CMemData memdata addr datum, CMemLayout memlayout seg bnd) =>
+       CMemory memory ch memlayout memdata cache cl cdata addr idx 
+               set line tag valid struct datum seg bnd
+       |memory->ch, memory->memlayout, memory->memdata-}
+instance CMemory Memory CacheHierarchy MemLayout MemData Cache CacheLevel CacheData 
+         Word32 Word32 Set Line Word32 Bool CacheStruct Word32 Segment Bound
 
 
+data Auxilary = 
+    Nil
+  | InO {fd :: [Word32], de :: [Instruction], em :: [(RegisterName,Address)], ew :: [(RegisterName,Address)]}
+  deriving Show
