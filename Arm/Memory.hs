@@ -286,14 +286,6 @@ prop_address_bits a =
     is = offsetBits_ c
 
 
-----memory
-{-        emptyMem_ = Map.empty
-         align_ addr = (addr `div` 4) * 4
-         getMemWord_ mem addr = if Map.member addr mem
-                               then mem Map.! addr
-                               else 0
-         setMemWord_ mem addr datum = Map.insert addr datum mem-}
-
 prop_align_mem_access :: Address -> Word32 -> Property
 prop_align_mem_access a d =
      property $ (getMemWord_ (setMemWord_ emptyMem_ a' d) a') == d
