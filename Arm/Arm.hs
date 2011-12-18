@@ -29,7 +29,7 @@ dbg fileName
   = do progOrError <- asmFile fileName
        case progOrError of
          Left prog
-           -> Debugger.dbg prog
+           -> debug prog
          Right err
            -> putStrLn err
 

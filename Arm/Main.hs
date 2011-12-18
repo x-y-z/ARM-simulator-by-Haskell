@@ -15,7 +15,7 @@ import Stage
 
 runStep :: (MonadState CPU m, MonadIO m) => Pipeline -> m ()
 runStep p = do singleStep p
-               r   <- isRunning
+               r <- isRunning
                if r == False then return () else (runStep p)
 
 
@@ -24,13 +24,14 @@ singleStep []       = return ()
 singleStep (s : ss) = do r <- isRunning
                          if r == False then return () else 
                            do s 
-                              cpu <- get
+                              --cpu <- get
+                              --liftIO $ putStrLn $ show cpu
                               singleStep ss
                               return ()
 
 runProgram :: Program -> Pipeline -> Hierarchy -> IO CPU
 runProgram program pipe h = do cpu <- (execStateT (loadProgram program) 
-                                       (CPU (emptyMem h) emptyRegs False
+                                       (CPU (emptyMem h) emptyRegs (D False)
                                         emptyCounters emptyAux)) 
                                cpu' <- execStateT startRunning cpu
                                execStateT (runStep pipe) cpu'

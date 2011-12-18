@@ -13,7 +13,7 @@
 
 {-#OPTIONS -XFlexibleContexts #-}
 
-module Debugger
+module Debugger (debug)
 where
 
 
@@ -40,7 +40,7 @@ import Loader
 import Parser
 import Program
 import RegisterName
-import Main
+import Main hiding (singleStep)
 import Stage
 
 
@@ -54,6 +54,20 @@ whileM  p f = do
                 return (return x `mplus` xs)
         else return mzero
 
+
+singleStep :: (MonadState CPU m, MonadIO m) => m ()
+singleStep
+  = do pc <- getReg R15
+       opcode <- readMem pc
+       let instr = Decoder.decode opcode
+       case instr of
+         Nothing
+           -> do fail ("ERROR: can't decode instruction " ++ (formatHex 8 '0' "" opcode)
+                           ++ " at adddress " ++ show pc ++ " (dec)")
+         Just instr'
+           -> do setReg R15 (pc + 4)
+                 eval instr'
+
 ----------------------------------------------------------------------
 -- Debugger state data structure.
 ----------------------------------------------------------------------
@@ -66,8 +80,8 @@ data DebugState
   deriving (Show)
 
 
-dbg :: Program -> IO ()
-dbg program = 
+debug :: Program -> IO ()
+debug program = 
             do dbgProgram program
                return ()
 
@@ -78,7 +92,7 @@ dbg program =
 dbgProgram :: Program -> IO CPU
 dbgProgram program
   = do cpu <- (execStateT (loadProgram program) 
-                       (CPU (emptyMem []) emptyRegs False emptyCounters emptyAux)) 
+                       (CPU (emptyMem []) emptyRegs (D False) emptyCounters emptyAux)) 
        cpu' <- execStateT startRunning cpu
        execStateT (dbgStep (Debug [] Hex '?')) cpu'
 
@@ -95,7 +109,7 @@ dbgStep dbgs = do r <- isRunning
                            'r' -> do showRegs (radix dbgs) 
                                      dbgStep dbgs {cmds = head cmd'}
                            'q' -> return ()
-                           'n' -> do singleStep inOrder
+                           'n' -> do singleStep
                                      showSurroundingInstructions (radix dbgs)
                                      dbgStep dbgs {cmds = head cmd'}
                            '?' -> do showHelp
@@ -122,45 +136,6 @@ dbgStep dbgs = do r <- isRunning
                      | otherwise = c
 
 
-{-let loop cpu dbgs
-          = do isRunning <- readIORef (running cpu)
-               if not isRunning
-                 then return ()
-                 else do putStr "dbg: "
-                         cmd <- getLine 
-                         putStrLn ""
-                         case head cmd of
-                           'm' -> do showMem (radix dbgs) cpu
-                                     loop cpu dbgs
-                           'r' -> do showRegs (radix dbgs) cpu
-                                     loop cpu dbgs
-                           'q' -> return ()
-                           'n' -> do singleStep cpu
-                                     showSurroundingInstructions (radix dbgs) cpu
-                                     loop cpu dbgs
-                           '?' -> do showHelp
-                                     loop cpu dbgs
-                           'b' -> do dbgs <- addBreakpoint dbgs
-                                     loop cpu dbgs
-                           's' -> do showDebugState dbgs
-                                     loop cpu dbgs
-                           'g' -> do runToBreakpoint cpu dbgs
-                                     loop cpu dbgs
-                           'h' -> do putStrLn "hex"
-                                     loop cpu dbgs { radix = Hex }
-                           'd' -> do putStrLn "decimal"
-                                     loop cpu dbgs { radix = Dec }
-                           x   -> if and [x >= '1', x <= '9']
-                                    then do stepTimes cpu ((fromEnum x) - (fromEnum '0'))
-                                            showSurroundingInstructions (radix dbgs) cpu
-                                            loop cpu dbgs
-                                    else do showSurroundingInstructions (radix dbgs) cpu
-                                            loop cpu dbgs
-        memSize = (memorySize program `div` 4) + 1
-    in-} 
-       
-
-
 ----------------------------------------------------------------------
 -- Run the cpu to a breakpoint, or until finished.
 ----------------------------------------------------------------------
@@ -170,27 +145,11 @@ runToBreakpoint dbgs
         bps = bkpts dbgs
     in do whileM isRunning (do pc <- getReg R15
                                case (elemIndex pc bps) of
-                                    Nothing -> do singleStep inOrder                                
+                                    Nothing -> do singleStep                                
                                     Just _  -> do showSurroundingInstructions rad
                                                   return ())
           return ()
 
-{-
-        regs = registers cpu
-        loop
-          = do isRunning <- readIORef (running cpu)
-               if (not isRunning)
-                 then return ()
-                 else do pc <- getReg regs R15
-                         case (elemIndex pc bps) of
-                           Nothing
-                             -> do singleStep cpu
-                                   loop 
-                           Just _
-                             -> do showSurroundingInstructions rad cpu
-                                   return ()
-    in loop
--}
 
 
 ----------------------------------------------------------------------
@@ -201,7 +160,7 @@ stepTimes n
       then return ()
       else do isR <- isRunning
               if isR
-                then do singleStep inOrder
+                then do singleStep
                         stepTimes (n-1)
                 else return ()
 
