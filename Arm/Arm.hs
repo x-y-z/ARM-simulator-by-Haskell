@@ -126,3 +126,17 @@ runProgramN program pipe h n = do cpu <- (execStateT (loadProgram program)
 prop_exec :: Program -> Property
 prop_exec p = monadicIO $ do b <- Test.QuickCheck.Monadic.run $ checkProgram p
                              Test.QuickCheck.Monadic.assert $ b
+                             
+test_programs :: Test
+test_programs = TestList [ (TestCase $ testProg "p1.arm"), 
+                           (TestCase $ testProg "p3.arm"),
+                           (TestCase $ testProgN "p4.arm"),
+                           (TestCase $ testProgN "p5.arm") ]
+                
+testProg :: String -> Assertion                
+testProg p = do b <- check p
+                assertBool ("Failed to run " ++ p) b
+                
+testProgN :: String -> Assertion                
+testProgN p = do b <- checkN p
+                 assertBool ("Failed to run " ++ p) b
