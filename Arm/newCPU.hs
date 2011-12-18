@@ -113,7 +113,13 @@ class (CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct,
        CMemData memdata addr datum, CMemLayout memlayout seg bnd) =>
        CMemory memory ch memlayout memdata cache cl cdata addr idx 
                set line tag valid struct datum seg bnd
-       |memory->ch, memory->memlayout, memory->memdata
+       |memory->ch, memory->memlayout, memory->memdata where
+       getMemLayout_ :: memory -> memlayout
+       setMemLayout_ :: memory -> memlayout -> memory
+       getMemData_ :: memory -> memdata
+       setMemData_ :: memory -> memdata -> memory
+       getCacheH_ :: memory -> ch
+       setCacheH_ :: memory -> ch -> memory
 
 class CCounter cnt name val|cnt->name, cnt->val where
       getCounter_ :: cnt -> name -> val
@@ -131,7 +137,14 @@ class CCounter cnt name val|cnt->name, cnt->val where
       
 data CPU = CPU MemData MemLayout Debug Registers Auxilary
 
-instance CCPU CPU Debug Registers MemData MemLayout RegisterName Word32 Word32 Word32 Segment Bound where-}
+instance CCPU CPU Debug Registers MemData MemLayout RegisterName Word32 Word32 Word32 Segment Bound where
+
+ cpu->ch, cpu->memlayout, 
+        cpu->memdata, cpu->cache, cpu->cl, cpu->cdata, cpu->addr, cpu->idx,
+        cpu->set, cpu->line, cpu->tag, cpu->valid, cpu->struct, cpu->datum, 
+        cpu->seg, cpu->bnd, cpu->rname, cpu->rval, cpu->cname, cpu->cval,
+
+-}
 
 class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx 
        set line tag valid struct datum seg bnd, CRegisters reg rname rval,  
@@ -151,20 +164,55 @@ class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx
        getAux :: cpu -> Auxilary         -- ad hoc function
        setAux :: cpu -> Auxilary -> cpu  -- ad hoc function
 -- registers
-       getReg :: rname -> m rval
-       getReg regname = do c <- get
-                           return $ getReg_ (getRegFile c) regname
-       setReg :: rname -> rval -> m ()
        cpsrGet :: Int -> m rval
        cpsrSet :: Int -> m ()
 -- memory
        setBound :: seg -> bnd -> m ()
        setBound s b = do cpu <- get
+                         let m = getMem cpu
+                         let lyt = getMemLayout_ m
+                         let lyt' = setBound_ lyt s b
+                         let m' = setMemLayout_ m lyt'
+                         put $ setMem cpu m'
                          return ()
        getBound :: seg -> m bnd
+       getBound s = do cpu <- get
+                       let m = getMem cpu
+                       let lyt = getMemLayout_ m
+                       return $ getBound_ lyt s
+       setBoundM :: seg -> (addr, addr) -> m ()
+       getBoundM :: seg -> m (addr, addr)
+       getMemWord :: addr -> m datum
+       getMemWord addr = do cpu <- get
+                            let md = getMemData_ $ getMem cpu
+                            return $ getMemWord_ md addr
+       setMemWord :: addr -> datum -> m ()
+       setMemWord a d = do cpu <- get
+                           let m = getMem cpu
+                           let md = getMemData_ m
+                           let md' = setMemWord_ md a d
+                           let m' = setMemData_ m md'
+                           let cpu' = setMem cpu m'
+                           put cpu'
+       readMem :: addr -> m datum
+--       readMem addr = 
+       writeMem :: addr -> datum -> m ()
+-- cache
+       loadCache :: addr -> m Integer
+       updateCache :: addr -> m ()
+                           
 
 
 -- registers
+       getReg :: rname -> m rval
+       getReg regname = do c <- get
+                           let rs = getRegFile c
+                           return $ getReg_ rs regname
+       setReg :: rname -> rval -> m ()
+       setReg name val = do c <- get
+                            let rs = getRegFile c
+                            let rs' = setReg_ rs name val
+                            put $ setRegFile c rs'
        cpsrGetN, cpsrGetZ, cpsrGetC, cpsrGetV :: m rval
        cpsrGetN = cpsrGet 31
        cpsrGetZ = cpsrGet 30
@@ -347,7 +395,13 @@ data Memory = Mem { cache :: CacheHierarchy,
                set line tag valid struct datum seg bnd
        |memory->ch, memory->memlayout, memory->memdata-}
 instance CMemory Memory CacheHierarchy MemLayout MemData Cache CacheLevel CacheData 
-         Word32 Word32 Set Line Word32 Bool CacheStruct Word32 Segment Bound
+         Word32 Word32 Set Line Word32 Bool CacheStruct Word32 Segment Bound where
+         getMemLayout_ mem = layout mem
+         setMemLayout_ mem lyt = mem {layout = lyt}
+         getMemData_ memory = mem memory
+         setMemData_ memory mdata = memory {mem = mdata}
+         getCacheH_ mem = cache mem
+         setCacheH_ mem ch = mem {cache = ch}
 
 
 data Auxilary = 
@@ -361,11 +415,13 @@ data CPU = CPU Memory Registers Debug Counters Auxilary
 {- MonadState cpu m, MonadIO m) => 
        CCPU cpu memory reg dbg cnt ch memlayout memdata cache cl cdata addr idx 
        set line tag valid struct datum seg bnd rname rval cname cval m-}
+{-
 instance  (MonadState CPU m, MonadIO m) => 
           CCPU CPU Memory Registers Debug Counters CacheHierarchy MemLayout MemData
               Cache CacheLevel CacheData Word32 Word32 Set Line Word32 Bool 
               CacheStruct Word32 Segment Bound RegisterName Word32 String Integer m
-
+          where
+-}
 
 {-
 type CacheDummy = Int
