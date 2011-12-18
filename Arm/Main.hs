@@ -1,10 +1,23 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 import Assembler
 import Arm
-import Loader
-import Program
 import Debugger
-import Memory (standardCache)
+import Memory (standardCache,cacheTests,
+               prop_address_bits,prop_dm_cache_insert,
+               prop_a_cache_insert,prop_align_mem_access)
 import Stage (inOrder)
+
+import Test.HUnit
+import Test.QuickCheck
+
+main :: IO ()
+main = do _ <- runTestTT $ TestList [ cacheTests, test_programs ]
+          quickCheck prop_address_bits
+          quickCheck prop_dm_cache_insert
+          quickCheck prop_a_cache_insert
+          quickCheck prop_align_mem_access
+          quickCheck prop_exec
+          return ()
 
 ----------------------
 -- Run a program

@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 {-#OPTIONS -XMultiParamTypeClasses -XTypeSynonymInstances -XFlexibleContexts -XFunctionalDependencies -XFlexibleInstances -XUndecidableInstances#-}
 module Memory (
                ----functions
@@ -12,7 +13,9 @@ module Memory (
                CacheData, Set, Line, CacheStruct, 
                Segment(CodeS, DataS, StackS, HeapS), 
                Bound(Bound, lowerB, upperB), Hierarchy, emptyMem, 
-               standardCache,
+               standardCache,cacheTests,prop_address_bits,
+               prop_dm_cache_insert,prop_a_cache_insert,
+               prop_align_mem_access,
                ----classes
                CMemory
               )
@@ -114,7 +117,6 @@ data Memory = Mem { cache :: CacheHierarchy,
 
 type Address = Word32
 type WordAddress = Address
-type ByteAddress = Address
 
 type MemData = Map WordAddress Word32
 
@@ -125,10 +127,10 @@ emptyMem h = Mem (buildHierarchy h) initMemLayout_ Map.empty
 instance CMemData MemData WordAddress Word32 where
          emptyMem_ = Map.empty
          align_ addr = (addr `div` 4) * 4
-         getMemWord_ mem addr = if Map.member addr mem
-                               then mem Map.! addr
-                               else 0
-         setMemWord_ mem addr datum = Map.insert addr datum mem
+         getMemWord_ mem' addr = if Map.member addr mem'
+                                 then mem' Map.! addr
+                                 else 0
+         setMemWord_ mem' addr datum = Map.insert addr datum mem'
 
 data Segment = CodeS | DataS | StackS | HeapS deriving (Ord, Eq, Show)
 data Bound = Bound {lowerB :: Address, 
@@ -166,7 +168,7 @@ instance CSet Set Line Word32 Bool where
          insertInSet_ s tag = if any (\(t, _) -> tag == t) s then s
                                  else aux s tag
             where aux []     t = [(t, False)]
-                  aux (l:ls) t = ls ++ [(t,False)] 
+                  aux (_:ls) t = ls ++ [(t,False)] 
                   -- this causes LRU replacement      
 
 
@@ -205,7 +207,7 @@ instance CCacheLevel CacheLevel CacheStruct Word32 where
 
 instance CCache Cache CacheLevel CacheData 
                 Word32 Word32 Set Line Word32 Bool CacheStruct where
-         insertInCache_ c@(Cache l m) addr 
+         insertInCache_ (Cache l m) addr 
            = (Cache l (insertInCacheData_ m idx tag))
            where idx = getIndex_ addr l
                  tag = getTag_ addr l
@@ -229,12 +231,12 @@ instance CMemory Memory CacheHierarchy MemLayout MemData
                  Cache CacheLevel CacheData 
                  Word32 Word32 Set Line 
                  Word32 Bool CacheStruct Word32 Segment Bound where
-         getMemLayout_ mem = layout mem
-         setMemLayout_ mem lyt = mem {layout = lyt}
+         getMemLayout_ mem' = layout mem'
+         setMemLayout_ mem' lyt = mem' {layout = lyt}
          getMemData_ memory = mem memory
          setMemData_ memory mdata = memory {mem = mdata}
-         getCacheH_ mem = cache mem
-         setCacheH_ mem ch = mem {cache = ch}
+         getCacheH_ mem' = cache mem'
+         setCacheH_ mem' ch = mem' {cache = ch}
 
 
 ------------------------

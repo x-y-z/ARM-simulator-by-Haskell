@@ -42,7 +42,6 @@ eval (And (Reg reg1) (Reg reg2) (Reg reg3))
        setReg reg1 (r2 .&. r3)
 
 -- branch unconditionally
--- TODO:  Change this to use actual PC rather than R15
 eval (B (Rel offset))
   = do pc <- getReg R15
        let pc' = pc - 4
@@ -215,10 +214,9 @@ eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
 
 -- software interrupt
 eval (Swi (Con isn))
- = do liftIO $ putStrLn "here"
-      cpu <- get
-      --dbg <- isDebug
-      swi isn False
+ = do cpu <- get
+      dbg <- isDebug
+      swi isn dbg
 
 
 evalInO :: (MonadState CPU m, MonadIO m) => Instruction -> m ()

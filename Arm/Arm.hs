@@ -97,10 +97,12 @@ checkN file = do p <- asmFile file
                                    return False
 
 checkProgram :: Program -> IO Bool
-checkProgram prog = do liftIO $ putStrLn (show prog ++ "\n\n")
-                       cp1@(CPU (Mem _ _ m1) r1 _ _ _) <- runProgramN prog simplePipe [] 100
-                       cp2@(CPU (Mem _ _ m2) r2 _ _ _) <- runProgramN prog inOrder [] 100
-                       if (m1 == m2 && (Map.insert R15 0 r1) == (Map.insert R15 0 r2)) then
+checkProgram prog = do cp1@(CPU (Mem _ _ m1) r1 _ _ _) <- 
+                         runProgramN prog simplePipe [] 100
+                       cp2@(CPU (Mem _ _ m2) r2 _ _ _) <- 
+                         runProgramN prog inOrder [] 100
+                       if (m1 == m2 && (Map.insert R15 0 r1) == 
+                           (Map.insert R15 0 r2)) then
                          return True else
                          do liftIO $ putStrLn ((show cp1) ++ "\n\n")
                             liftIO $ putStrLn ((show cp2) ++ "\n\n")
