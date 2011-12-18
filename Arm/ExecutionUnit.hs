@@ -14,6 +14,7 @@ import Decoder
 import Format
 import Instruction
 import Loader
+import Memory (Segment (DataS))
 import Operand
 import Program
 import RegisterName
@@ -151,13 +152,15 @@ eval (Ldr (Reg reg1) op2)
                   -> do addr <- getReg reg2
                         l <- loadCache (addr + offset)
                         advanceCycle l
-                        setReg reg2 (addr + offset)  -- write the address back into reg2
+                        -- write the address back into reg2     
+                        setReg reg2 (addr + offset)
                         readMem (addr + offset)
                 Pos (Ind reg2) offset
                   -> do addr <- getReg reg2
                         l <- loadCache (addr + offset)
                         advanceCycle l
-                        setReg reg2 (addr + offset)  -- write addr + offset back into reg2
+                        -- write addr + offset back into reg2
+                        setReg reg2 (addr + offset)  
                         readMem addr
        setReg reg1 val         
 
@@ -201,7 +204,8 @@ eval (Str (Reg reg1) op2)
          Pos (Ind reg2) offset
            -> do addr <- getReg reg2
                  writeMem (addr + bnd) val
-                 setReg reg2 (addr + bnd + offset)  -- write addr + offset back into reg2
+                 -- write addr + offset back into reg2
+                 setReg reg2 (addr + bnd + offset)
 
 -- subtract two registers
 eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
@@ -236,7 +240,6 @@ evalInO (And (Reg reg1) (Reg reg2) (Reg reg3))
        setReg reg1 (r2 .&. r3)
 
 -- branch unconditionally
--- TODO:  Change this to use actual PC rather than R15
 evalInO (B (Rel offset))
   = do pc <- getReg R15
        let pc' = pc - 8

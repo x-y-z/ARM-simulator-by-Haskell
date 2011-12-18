@@ -10,6 +10,7 @@ import Data.Word
 import Control.Monad.State
 
 import CPU
+import Memory (Address)
 import Loader
 import RegisterName
 
@@ -121,4 +122,7 @@ fetchString addr
                        else if c4 == 0
                               then return [chr c1, chr c2, chr c3]
                               else do s <- fetchString (addr + 4)
-                                      return ([chr c1, chr c2, chr c3, chr c4] ++ s)
+                                      return ([chr c1, 
+                                               chr c2, 
+                                               chr c3, 
+                                               chr c4] ++ s)

@@ -107,7 +107,8 @@ chainr p op v      = (p `chainr1` op) +++ return v
 chainr1           :: Parser a -> Parser (a -> a -> a) -> Parser a
 p `chainr1` op     = do {x <- p; rest x}
                      where
-                        rest x = do {f <- op; y <- p `chainr1` op; return (f x y)}
+                        rest x = do {f <- op; y <- p `chainr1` op; 
+                                     return (f x y)}
                                  +++ return x
 
 ops               :: [(Parser a, b)] -> Parser b

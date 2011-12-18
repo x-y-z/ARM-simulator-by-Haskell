@@ -10,6 +10,7 @@ import Data.Char
 import Control.Monad.State
 
 import CPU
+import Memory (Address, Segment (CodeS, DataS))
 import Encoder
 import Format
 import Instruction
@@ -39,7 +40,8 @@ loadProgram program = let org    = origin program
 ----------------------------------------------------------------------
 -- Load register pre-load values.
 ----------------------------------------------------------------------
-loadRegisters :: (MonadState CPU m, MonadIO m) => [(RegisterName, Word32)] -> m ()
+loadRegisters :: (MonadState CPU m, MonadIO m) => 
+                 [(RegisterName, Word32)] -> m ()
 loadRegisters [] = return ()
 loadRegisters ((regName, val) : rest) = do setReg regName val
                                            loadRegisters rest
@@ -47,7 +49,8 @@ loadRegisters ((regName, val) : rest) = do setReg regName val
 ----------------------------------------------------------------------
 -- Load a list of instructions into memory.
 ----------------------------------------------------------------------
-loadInstructions :: (MonadState CPU m, MonadIO m) => Address -> [Instruction] -> m Word32
+loadInstructions :: (MonadState CPU m, MonadIO m) => 
+                    Address -> [Instruction] -> m Word32
 loadInstructions addr [] = return (addr - 4)
 loadInstructions addr (ins : inss)
   = do let opcode = encode ins
@@ -90,7 +93,8 @@ loadConstant addr (Word w)
 ----------------------------------------------------------------------
 -- Load an array of constants into memory.
 ----------------------------------------------------------------------
-loadArray :: (MonadState CPU m, MonadIO m) => Address -> Word32 -> Constant -> m ()
+loadArray :: (MonadState CPU m, MonadIO m) => 
+             Address -> Word32 -> Constant -> m ()
 loadArray addr 0 const
   = return ()
 

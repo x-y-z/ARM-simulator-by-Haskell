@@ -9,44 +9,19 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
 import Assembler
-import CPU
+import Arm
 import Loader
 import Program
-import RegisterName
-import Stage
+import Debugger
+import Memory (standardCache)
+import Stage (inOrder)
 
-runStep :: (MonadState CPU m, MonadIO m) => Pipeline -> m ()
-runStep p = do singleStep p
-               r <- isRunning
-               if r == False then return () else (runStep p)
+----------------------
+-- Run a program
+----------------------
 
-
-singleStep :: (MonadState CPU m, MonadIO m) => Pipeline -> m ()
-singleStep []       = return ()
-singleStep (s : ss) = do r <- isRunning
-                         if r == False then return () else 
-                           do s 
-                              --cpu <- get
-                              --liftIO $ putStrLn $ show cpu
-                              singleStep ss
-                              return ()
-
-runProgram :: Program -> Pipeline -> Hierarchy -> IO CPU
-runProgram program pipe h = do cpu <- (execStateT (loadProgram program) 
-                                       (CPU (emptyMem h) emptyRegs (D False)
-                                        emptyCounters emptyAux)) 
-                               cpu' <- execStateT startRunning cpu
-                               execStateT (runStep pipe) cpu'
-                    
-
-run :: Program -> Pipeline -> Hierarchy -> IO ()
-run program pipe h
-  = do cpu <- runProgram program pipe h
-       putStrLn $ show cpu
-       
-
-runFromFile :: String -> Pipeline -> Hierarchy -> IO ()
-runFromFile fileName pipe h
+run :: String -> IO ()
+run fileName
   = do progOrError <- asmFile fileName
        case progOrError of
          Left prog
@@ -116,43 +91,3 @@ runProgramN program pipe h n = do cpu <- (execStateT (loadProgram program)
 prop_exec :: Program -> Property
 prop_exec p = monadicIO $ do b <- Test.QuickCheck.Monadic.run $ checkProgram p
                              Test.QuickCheck.Monadic.assert $ b
-{-
-<<<<<<< HEAD
-testInO :: Test
-testInO = TestList [ ]
-                               
-main :: IO ()
-main = do _ <- runTestTT $ TestList [testInO]
-          return () 
-=======
-run' :: (MonadState CPU m, MonadIO m) => m ()
-
-run' = do singleStep
-          run'
-
-singleStep :: (MonadState CPU m, MonadIO m) => m ()
-singleStep
-  = do pc <- getReg R15
-       opcode <- readMem pc
-       let instr = decode opcode
-       case instr of
-         Nothing
-           -> do fail ("ERROR: can't decode instruction " ++ (formatHex 8 '0' "" opcode)
-                           ++ " at adddress " ++ show pc ++ " (dec)")
-         Just instr'
-           -> do setReg R15 (pc + 4)
-                 eval instr'
-
-
-runProgram :: Program -> IO CPU
-runProgram program = do cpu <- (execStateT (loadProgram program) 
-                                (CPU emptyMem emptyRegs False emptyCounters emptyAux)) 
-                        cpu' <- execStateT startRunning cpu
-                        execStateT runStep cpu'
-                    
-
-run :: Program -> IO ()
-run program
-  = do cpu <- runProgram program
-       putStrLn $ show cpu
->>>>>>> addDebug-}

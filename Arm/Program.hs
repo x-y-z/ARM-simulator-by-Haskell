@@ -10,6 +10,7 @@ import Test.QuickCheck
 import Instruction
 import CPU
 import Operand
+import Memory (Address)
 import RegisterName
 
 data Constant
