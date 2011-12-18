@@ -225,12 +225,6 @@ instance CCacheHierarchy CacheHierarchy Cache CacheLevel CacheData
 standardCache :: Hierarchy
 standardCache = [stdL1Cache_, stdL2Cache_]
 
-testCL :: CacheLevel
-testCL = stdL1Cache_
-
-testCLA :: CacheLevel
-testCLA = stdL1ACache_
-
 instance CMemory Memory CacheHierarchy MemLayout MemData 
                  Cache CacheLevel CacheData 
                  Word32 Word32 Set Line 
@@ -241,6 +235,18 @@ instance CMemory Memory CacheHierarchy MemLayout MemData
          setMemData_ memory mdata = memory {mem = mdata}
          getCacheH_ mem = cache mem
          setCacheH_ mem ch = mem {cache = ch}
+
+
+------------------------
+-- test
+------------------------
+
+
+testCL :: CacheLevel
+testCL = stdL1Cache_
+
+testCLA :: CacheLevel
+testCLA = stdL1ACache_
 
 testDMCache :: Cache
 testDMCache = (Cache testCL emptyCacheData_)
@@ -278,3 +284,17 @@ prop_address_bits a =
     c = testCL
     ts = (indexBits_ c) + is
     is = offsetBits_ c
+
+
+----memory
+{-        emptyMem_ = Map.empty
+         align_ addr = (addr `div` 4) * 4
+         getMemWord_ mem addr = if Map.member addr mem
+                               then mem Map.! addr
+                               else 0
+         setMemWord_ mem addr datum = Map.insert addr datum mem-}
+
+prop_align_mem_access :: Address -> Word32 -> Property
+prop_align_mem_access a d =
+     property $ (getMemWord_ (setMemWord_ emptyMem_ a' d) a') == d
+     where a' = align_ a
