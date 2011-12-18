@@ -78,7 +78,7 @@ dbg program =
 dbgProgram :: Program -> IO CPU
 dbgProgram program
   = do cpu <- (execStateT (loadProgram program) 
-                       (CPU (emptyMem []) emptyRegs False emptyCounters emptyAux)) 
+                       (CPU (emptyMem []) emptyRegs (D False) emptyCounters emptyAux)) 
        cpu' <- execStateT startRunning cpu
        execStateT (dbgStep (Debug [] Hex '?')) cpu'
 
