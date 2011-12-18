@@ -65,9 +65,11 @@ encode (Add (Reg r1) (Reg r2) op2)
         w2 = concatFields 0
                (case op2 of
                   Reg r3
-                    -> [(25, 25, 0), (3, 0, regIndex r3)]   -- second operand is register
+                    -> [(25, 25, 0), (3, 0, regIndex r3)]   
+                       -- second operand is register
                   Con c1
-                    -> [(25, 25, 1), (7, 0, c1)]            -- 8-bit constant
+                    -> [(25, 25, 1), (7, 0, c1)]            
+                       -- 8-bit constant
                )
     in w1 .|. w2
 
@@ -283,7 +285,8 @@ encodeMReg ls op1 regs
                        ]
                )
         w3 = concatFields 0
-               (map (\reg -> let i = fromIntegral (regIndex reg) in (i, i, 1)) regs)
+               (map (\reg -> let i = fromIntegral (regIndex reg) in (i, i, 1))
+                    regs)
     in w1 .|. w2 .|. w3
 
 -- encode a load or store

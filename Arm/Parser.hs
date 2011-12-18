@@ -8,6 +8,7 @@ import Control.Monad
 
 import BinaryNumber
 import CPU
+import Memory (Address)
 import Instruction
 import Operand
 import Program
@@ -238,7 +239,8 @@ pMrg
 -- post-indexed
 pPos :: Parser Operand
 pPos
-  = do { char '['; Reg r <- pReg; char ']'; csep; Con c <- pCon; return (Pos (Ind r) c) }
+  = do { char '['; Reg r <- pReg; char ']'; csep; Con c <- pCon; 
+         return (Pos (Ind r) c) }
 
 -- register
 pReg :: Parser Operand
@@ -273,7 +275,8 @@ p2Ops
 -- Parse three operands.
 ----------------------------------------------------------------------
 p3Ops
-  = do { op1 <- pOperand; csep; op2 <- pOperand; csep; op3 <- pOperand; return (op1, op2, op3) }
+  = do { op1 <- pOperand; csep; op2 <- pOperand; csep; op3 <- pOperand; 
+         return (op1, op2, op3) }
 
 
 
@@ -306,15 +309,18 @@ pSwi   = ops1 "swi"   Swi
 ----------------------------------------------------------------------
 -- instruction with one operand
 ops1 name instr
-  = do { string name; spaces; op1 <- pOperand; return (Instruction (instr op1)) }
+  = do { string name; spaces; op1 <- pOperand; 
+         return (Instruction (instr op1)) }
 
 -- instruction with two operands
 ops2 name instr
-  = do { string name; spaces; (op1, op2) <- p2Ops; return (Instruction (instr op1 op2)) }
+  = do { string name; spaces; (op1, op2) <- p2Ops; 
+         return (Instruction (instr op1 op2)) }
 
 -- instruction with three operands
 ops3 name instr
-  = do { string name; spaces; (op1, op2, op3) <- p3Ops; return (Instruction (instr op1 op2 op3)) }
+  = do { string name; spaces; (op1, op2, op3) <- p3Ops; 
+         return (Instruction (instr op1 op2 op3)) }
 
 
 

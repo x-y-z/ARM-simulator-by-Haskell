@@ -146,11 +146,13 @@ eval (Ldr (Reg reg1) op2)
                         readMem (addr + offset)
                 Aut (Bas reg2 offset)
                   -> do addr <- getReg reg2
-                        setReg reg2 (addr + offset)  -- write the address back into reg2
+                        setReg reg2 (addr + offset)  
+                        -- write the address back into reg2
                         readMem (addr + offset)
                 Pos (Ind reg2) offset
                   -> do addr <- getReg reg2
-                        setReg reg2 (addr + offset)  -- write addr + offset back into reg2
+                        setReg reg2 (addr + offset)  
+                        -- write addr + offset back into reg2
                         readMem addr
        setReg reg1 val
 
@@ -193,7 +195,8 @@ eval (Str (Reg reg1) op2)
          Pos (Ind reg2) offset
            -> do addr <- getReg reg2
                  writeMem addr val
-                 setReg reg2 (addr + offset)  -- write addr + offset back into reg2
+                 setReg reg2 (addr + offset)  
+                 -- write addr + offset back into reg2
 
 -- subtract two registers
 eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))

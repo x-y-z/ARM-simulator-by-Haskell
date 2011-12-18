@@ -74,11 +74,13 @@ replaceSymbols [] line addr _ origin regBindings iAccum cAccum
       }
 
 ----------
-replaceSymbols (Origin org : rest) line addr lTab origin regBindings iAccum cAccum
+replaceSymbols (Origin org : rest) line addr lTab origin 
+               regBindings iAccum cAccum
   = replaceSymbols rest line org lTab org regBindings iAccum cAccum
 
 ----------
-replaceSymbols (Instruction i : rest) line addr lTab origin regBindings iAccum cAccum
+replaceSymbols (Instruction i : rest) line addr lTab origin 
+               regBindings iAccum cAccum
   = let i' = case i of
                B   (Lab l) -> replaceBranch B   lTab addr line l
                Beq (Lab l) -> replaceBranch Beq lTab addr line l
@@ -87,34 +89,41 @@ replaceSymbols (Instruction i : rest) line addr lTab origin regBindings iAccum c
                Blt (Lab l) -> replaceBranch Blt lTab addr line l
                Bne (Lab l) -> replaceBranch Bne lTab addr line l
                _           -> i
-    in replaceSymbols rest line (addr + 4) lTab origin regBindings (i' : iAccum) cAccum
+    in replaceSymbols rest line (addr + 4) lTab origin 
+       regBindings (i' : iAccum) cAccum
 
 ----------
-replaceSymbols (RegInit regName op : rest) line addr lTab origin regBindings iAccum cAccum
+replaceSymbols (RegInit regName op : rest) line addr lTab origin 
+               regBindings iAccum cAccum
   = let val = case op of
                 Lab label
                   -> case lookup label lTab of
                        Nothing
-                         -> error ("label " ++ label ++ " does not exist, line " ++ show line)
+                         -> error ("label " ++ label ++ 
+                                   " does not exist, line " ++ show line)
                        Just label'
                          -> label'
-    in replaceSymbols rest line addr lTab origin ((regName, val) : regBindings) iAccum cAccum
+    in replaceSymbols rest line addr lTab origin 
+       ((regName, val) : regBindings) iAccum cAccum
 
 ----------
 replaceSymbols (Newline : rest) line addr lTab origin regBindings iAccum cAccum
   = replaceSymbols rest (line + 1) addr lTab origin regBindings iAccum cAccum
 
 ----------
-replaceSymbols (Data [] data' : rest) line addr lTab origin regBindings iAccum cAccum
+replaceSymbols (Data [] data' : rest) line addr lTab origin 
+               regBindings iAccum cAccum
   = let c = case data' of
               [c']
                 -> c'
               _ -> List data'
         size = constSize c
-    in replaceSymbols rest line (addr + size) lTab origin regBindings iAccum ((addr, c) : cAccum)
+    in replaceSymbols rest line (addr + size) lTab origin 
+       regBindings iAccum ((addr, c) : cAccum)
 
 ----------
-replaceSymbols (Data [Lab label] data' : rest) line addr lTab origin regBindings iAccum cAccum
+replaceSymbols (Data [Lab label] data' : rest) line addr lTab origin 
+               regBindings iAccum cAccum
   = let c = case data' of
               [c']
                 -> c'
@@ -122,10 +131,12 @@ replaceSymbols (Data [Lab label] data' : rest) line addr lTab origin regBindings
         size = constSize c
         addr' = case lookup label lTab of
                   Nothing
-                    -> error ("label " ++ label ++ " does not exist, line " ++ show line)
+                    -> error ("label " ++ label ++ 
+                              " does not exist, line " ++ show line)
                   Just addr''
                     -> addr''
-    in replaceSymbols rest line (addr + size) lTab origin regBindings iAccum ((addr', c) : cAccum)
+    in replaceSymbols rest line (addr + size) lTab origin 
+       regBindings iAccum ((addr', c) : cAccum)
 
 ----------
 replaceSymbols (_ : rest) line addr lTab origin regBindings iAccum cAccum

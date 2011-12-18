@@ -33,6 +33,8 @@ import Control.Monad.State
 -- Local libraries.
 ----------------------------------------------------------------------
 import CPU
+import Memory (Address, emptyMem, Segment (DataS, CodeS))
+import Register (emptyRegs)
 import Decoder
 import ExecutionUnit
 import Format
@@ -40,7 +42,7 @@ import Loader
 import Parser
 import Program
 import RegisterName
-import Main hiding (singleStep)
+import Arm hiding (singleStep)
 import Stage
 
 
@@ -62,7 +64,8 @@ singleStep
        let instr = Decoder.decode opcode
        case instr of
          Nothing
-           -> do fail ("ERROR: can't decode instruction " ++ (formatHex 8 '0' "" opcode)
+           -> do fail ("ERROR: can't decode instruction " ++ 
+                      (formatHex 8 '0' "" opcode)
                            ++ " at adddress " ++ show pc ++ " (dec)")
          Just instr'
            -> do setReg R15 (pc + 4)
@@ -92,7 +95,11 @@ debug program =
 dbgProgram :: Program -> IO CPU
 dbgProgram program
   = do cpu <- (execStateT (loadProgram program) 
-                       (CPU (emptyMem []) emptyRegs (D False) emptyCounters emptyAux)) 
+                          (CPU (emptyMem []) 
+                               emptyRegs 
+                               (D False) 
+                               emptyCounters 
+                               emptyAux)) 
        cpu' <- execStateT startRunning cpu
        execStateT (dbgStep (Debug [] Hex '?')) cpu'
 
@@ -121,14 +128,19 @@ dbgStep dbgs = do r <- isRunning
                            'g' -> do runToBreakpoint dbgs
                                      dbgStep dbgs {cmds = head cmd'}
                            'h' -> do liftIO $ putStrLn "hex"
-                                     dbgStep dbgs { radix = Hex, cmds = head cmd' }
+                                     dbgStep dbgs { radix = Hex, 
+                                                    cmds = head cmd' }
                            'd' -> do liftIO $ putStrLn "decimal"
-                                     dbgStep dbgs { radix = Dec, cmds = head cmd' }
+                                     dbgStep dbgs { radix = Dec, 
+                                                    cmds = head cmd' }
                            x   -> if and [x >= '1', x <= '9']
-                                    then do stepTimes ((fromEnum x) - (fromEnum '0'))
-                                            showSurroundingInstructions (radix dbgs)
+                                    then do stepTimes ((fromEnum x) - 
+                                                       (fromEnum '0'))
+                                            showSurroundingInstructions 
+                                                (radix dbgs)
                                             dbgStep dbgs {cmds = head cmd'}
-                                    else do showSurroundingInstructions (radix dbgs)
+                                    else do showSurroundingInstructions 
+                                                (radix dbgs)
                                             dbgStep dbgs {cmds = head cmd'}
                   else return ()
     where checkCmd :: String -> String
@@ -145,8 +157,9 @@ runToBreakpoint dbgs
         bps = bkpts dbgs
     in do whileM isRunning (do pc <- getReg R15
                                case (elemIndex pc bps) of
-                                    Nothing -> do singleStep                                
-                                    Just _  -> do showSurroundingInstructions rad
+                                    Nothing -> do singleStep
+                                    Just _  -> do showSurroundingInstructions 
+                                                      rad
                                                   return ())
           return ()
 
@@ -213,19 +226,13 @@ showMem :: (MonadState CPU m, MonadIO m) => Radix -> m ()
 
 showMem radix
   = do (lo, hi) <- getBoundM DataS -- :: IO (Int, Int)
-       forM [lo .. hi] $ \addr -> do val <- readMem addr
-                                     liftIO $ putStrLn (" " ++ (formatNum radix addr) ++ ": " ++ (formatNum radix val))
+       forM [lo .. hi] 
+            $ \addr -> do val <- readMem addr
+                          liftIO $ putStrLn (" " ++ 
+                                             (formatNum radix addr) ++ 
+                                             ": " ++ 
+                                             (formatNum radix val))
        return ()             
-
-
-       {-let loop addr
-             = do val <- readMem addr
-                  if addr >= hiByte
-                    then return ()
-                    else do liftIO $ putStrLn (" " ++ (formatNum radix addr) ++ ": " ++ (formatNum radix val))
-                            liftIO $ loop (addr + 4)
-       loop lo-}
-
 
 
 ----------------------------------------------------------------------
@@ -235,16 +242,30 @@ showRegs :: (MonadState CPU m, MonadIO m) => Radix -> m ()
 showRegs radix
   = let showReg regName
           = do regVal <- getReg regName
-               liftIO $ putStr ((show regName) ++ "=" ++ (formatNum radix regVal))
-    in do { liftIO $ putStr "  "; showReg R0; liftIO $ putStr "  "; showReg R4; 
-            liftIO $ putStr "   "; showReg R8; liftIO $ putStr "  "; showReg R12; liftIO $ putStrLn "";
-            liftIO $ putStr "  "; showReg R1; liftIO $ putStr "  "; showReg R5; 
-            liftIO $ putStr "   "; showReg R9; liftIO $ putStr "  "; showReg R13; liftIO $ putStrLn "";
-            liftIO $ putStr "  "; showReg R2; liftIO $ putStr "  "; showReg R6; 
-            liftIO $ putStr "  "; showReg R10; liftIO $ putStr "  "; showReg R14; liftIO $ putStrLn "";
-            liftIO $ putStr "  "; showReg R3; liftIO $ putStr "  "; showReg R7; 
-            liftIO $ putStr "  "; showReg R11; liftIO $ putStr "  "; showReg R15; liftIO $ putStrLn "";
-            showReg CPSR; liftIO $ putStr " ("; showCPSRFlags; liftIO $ putStrLn ")" }
+               liftIO $ putStr ((show regName) ++ "=" ++ 
+                                (formatNum radix regVal))
+    in do { liftIO $ putStr "  "; showReg R0; 
+            liftIO $ putStr "  "; showReg R4; 
+            liftIO $ putStr "   "; showReg R8; 
+            liftIO $ putStr "  "; showReg R12; 
+            liftIO $ putStrLn "";
+            liftIO $ putStr "  "; showReg R1; 
+            liftIO $ putStr "  "; showReg R5; 
+            liftIO $ putStr "   "; showReg R9; 
+            liftIO $ putStr "  "; showReg R13; 
+            liftIO $ putStrLn "";
+            liftIO $ putStr "  "; showReg R2; 
+            liftIO $ putStr "  "; showReg R6; 
+            liftIO $ putStr "  "; showReg R10; 
+            liftIO $ putStr "  "; showReg R14; 
+            liftIO $ putStrLn "";
+            liftIO $ putStr "  "; showReg R3; 
+            liftIO $ putStr "  "; showReg R7; 
+            liftIO $ putStr "  "; showReg R11; 
+            liftIO $ putStr "  "; showReg R15; 
+            liftIO $ putStrLn "";
+            showReg CPSR; 
+            liftIO $ putStr " ("; showCPSRFlags; liftIO $ putStrLn ")" }
 
 
 ----------------------------------------------------------------------
@@ -257,9 +278,11 @@ showSurroundingInstructions radix
        bounds <- getBoundM CodeS
        let hiBound = fromIntegral (snd bounds) 
        let addrsLo = dropWhile (< 0) [pc - 20, pc - 16 .. pc - 4]
-       let shLo    = map (showInstruction radix False) (map fromIntegral addrsLo)
+       let shLo    = map (showInstruction radix False) 
+                         (map fromIntegral addrsLo)
        let addrsHi = takeWhile (< hiBound) [pc + 4, pc + 8 .. pc + 20]
-       let shHi    = map (showInstruction radix False) (map fromIntegral addrsHi)
+       let shHi    = map (showInstruction radix False) 
+                         (map fromIntegral addrsHi)
        sequence shLo
        showInstruction radix True (fromIntegral pc)
        sequence shHi
@@ -270,13 +293,17 @@ showSurroundingInstructions radix
 ----------------------------------------------------------------------
 -- Show current instruction (highlighted).
 ----------------------------------------------------------------------
-showInstruction :: (MonadState CPU m, MonadIO m) => Radix -> Bool -> Address -> m ()
+showInstruction :: (MonadState CPU m, MonadIO m) => 
+                   Radix -> Bool -> Address -> m ()
 showInstruction radix highlight addr
   = do opcode <- readMem addr
        let instr = Decoder.decode opcode
        let hexOp = formatHex 8 '0' "" opcode
-       liftIO $ putStr ((if highlight then ">" else " ") ++ (formatNum radix addr) ++ ": "
-                 ++ (formatNum radix opcode) ++ " " ++ (if highlight then ">" else " "))
+       liftIO $ putStr ((if highlight then ">" else " ") ++ 
+                        (formatNum radix addr) ++ ": " ++ 
+                        (formatNum radix opcode) ++ 
+                        " " ++ 
+                        (if highlight then ">" else " "))
        case instr of
          Nothing
            -> liftIO $ putStrLn ""

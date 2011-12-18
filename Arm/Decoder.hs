@@ -52,7 +52,8 @@ decode word
          _   -> case bits (27, 25) of
                   0x5 -> decodeBranch word
                   _   -> case (bits (27, 26)) of
-                           0x0  -- multiplication or data processing instructions
+                           0x0  
+                           -- multiplication or data processing instructions
                              -> decodeMulOrDp word destReg firstOp op2
                            0x1  -- data transfer instructions
                              -> decodeDataTrans word destReg

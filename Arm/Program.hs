@@ -5,6 +5,7 @@ import Data.Word
 
 import Instruction
 import CPU
+import Memory (Address)
 import RegisterName
 
 data Constant

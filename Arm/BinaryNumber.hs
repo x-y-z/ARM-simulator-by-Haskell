@@ -49,7 +49,9 @@ instance Read Binary32 where
 This expression also converts a binary string into an integer, but it uses
 4.3 times the number of reductions, and 4.8 times the number of cells:
 
-s2b x = foldl (+) 0 (map (uncurry (*)) (zip (reverse (map ((flip (-)) (ord '0')) (map ord x))) [floor (2 ** x) | x <- [0..]]))
+s2b x = foldl (+) 0 (map (uncurry (*)) 
+        (zip (reverse (map ((flip (-)) (ord '0')) (map ord x))) 
+             [floor (2 ** x) | x <- [0..]]))
 
 -}
 
