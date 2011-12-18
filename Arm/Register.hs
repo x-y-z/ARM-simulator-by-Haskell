@@ -87,8 +87,7 @@ emptyRegs = Map.fromList[
   (R13,0),
   (R14,0),
   (R15,0),
-  (CPSR,0),
-  (PC,0)
+  (CPSR,0)
   ]
 
 instance CRegisters Registers RegisterName Word32  where
@@ -97,7 +96,7 @@ instance CRegisters Registers RegisterName Word32  where
                                   (R6,0), (R7,0), (R8,0),
                                   (R9,0), (R10,0),(R11,0),
                                   (R12,0),(R13,0),(R14,0),
-                                  (R15,0),(CPSR,0),(PC,0)]
+                                  (R15,0),(CPSR,0)]
          getReg_ rs id = rs Map.! id
 
          setReg_ rs id val = Map.insert id val rs

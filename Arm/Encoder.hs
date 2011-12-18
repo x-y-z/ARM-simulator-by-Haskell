@@ -125,11 +125,6 @@ encode (Bic (Reg r1) (Reg r2) op2)
     in w1 .|. w2
 
 ----------------------------------------
--- branch and link
-encode (Bl (Rel rel))
-  = encodeBranch condAl rel .|. concatFields 0 [(24, 24, 1)]
-
-----------------------------------------
 -- branch if less than
 encode (Blt (Rel rel))
   = encodeBranch condLt rel

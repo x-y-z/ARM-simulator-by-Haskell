@@ -1,11 +1,12 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 {-#OPTIONS -XFlexibleContexts #-}
 module Arm
 where
 
-import Control.Monad.State
-
-import Data.Map (Map)
+import Data.Map ()  
 import qualified Data.Map as Map
+  
+import Control.Monad.State
 
 import Test.HUnit
 import Test.QuickCheck
@@ -62,9 +63,9 @@ runFromFile fileName pipe h
 check :: String -> IO Bool
 check file = do p <- asmFile file
                 case p of
-                  Left prog -> do (CPU (Mem c1 l1 m1) r1 _ _ _) 
+                  Left prog -> do (CPU (Mem _ _ m1) r1 _ _ _) 
                                        <- runProgram prog simplePipe []
-                                  (CPU (Mem c2 l2 m2) r2 _ _ _) 
+                                  (CPU (Mem _ _ m2) r2 _ _ _) 
                                        <- runProgram prog inOrder []
                                   return (m1 == m2 && 
                                           (Map.insert R15 0 r1) == 
@@ -90,8 +91,8 @@ runN program pipe h
 checkN :: String -> IO Bool
 checkN file = do p <- asmFile file
                  case p of
-                   Left prog -> do (CPU (Mem c1 l1 m1) r1 _ _ _) <- runProgramN prog simplePipe [] 100
-                                   (CPU (Mem c2 l2 m2) r2 _ _ _) <- runProgramN prog inOrder [] 100
+                   Left prog -> do (CPU (Mem _ _ m1) r1 _ _ _) <- runProgramN prog simplePipe [] 100
+                                   (CPU (Mem _ _ m2) r2 _ _ _) <- runProgramN prog inOrder [] 100
                                    return (m1 == m2 && (Map.insert R15 0 r1) == (Map.insert R15 0 r2))
                    Right err -> do putStrLn err
                                    return False

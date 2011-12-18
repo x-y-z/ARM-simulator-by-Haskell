@@ -30,7 +30,6 @@ data RegisterName
   | R14
   | R15
   | CPSR
-  | PC
   deriving (Enum, Eq, Ix, Ord, Read)
 
 -- No arbitrary R15 because it is reserved for use as the program counter
@@ -82,7 +81,6 @@ show' R13  = "r13"
 show' R14  = "r14"
 show' R15  = "r15"
 show' CPSR = "cpsr"
-show' PC   = "pc"
 
 ----------------------------------------------------------------------
 -- Convert a string to a register name.
@@ -104,4 +102,3 @@ read' "r13"  = R13
 read' "r14"  = R14
 read' "r15"  = R15
 read' "cpsr" = CPSR
-read' "pc"   = PC

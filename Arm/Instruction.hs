@@ -17,7 +17,6 @@ data Instruction
   | Beq   Operand
   | Bgt   Operand
   | Bic   Operand Operand Operand
-  | Bl    Operand
   | Blt   Operand
   | Bne   Operand
   | Cmp   Operand Operand
@@ -46,7 +45,6 @@ instance Show Instruction where
                              show op1 ++ ", " ++ 
                              show op2 ++ ", " ++ 
                              show op3
-  show (Bl    op1)         = "bl    " ++ show op1
   show (Blt   op1)         = "blt   " ++ show op1
   show (Bne   op1)         = "bne   " ++ show op1
   show (Cmp   op1 op2)     = "cmp   " ++ 
@@ -98,7 +96,6 @@ arbAut = liftM Aut arbBas
 
 arbPos :: Gen Operand
 arbPos = liftM2 Pos arbInd arbOffset
-         
          
 -- Generating everything but Swi because we don't want to 
 -- have to give command-line input during random testing

@@ -130,7 +130,7 @@ singleStage = do pc <- getReg R15
                                         else
                    do nextCycle
                       case (Decoder.decode opcode) of
-                        Nothing -> do fail ("ERROR: can't decode instruction")
+                        Nothing -> liftIO $ putStrLn "ERROR: can't decode instruction"
                         Just i -> do setReg R15 (pc + 4)
                                      nextCycle
                                      eval i

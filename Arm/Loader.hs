@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 {-#OPTIONS  -XFlexibleContexts #-}
 
 module Loader
@@ -12,7 +13,6 @@ import Control.Monad.State
 import CPU
 import Memory (Address, Segment (CodeS, DataS))
 import Encoder
-import Format
 import Instruction
 import Program
 import RegisterName
@@ -24,10 +24,8 @@ loadProgram :: (MonadState CPU m, MonadIO m) => Program -> m ()
 loadProgram program = let org    = origin program
                           instrs = instructions program
                           consts = constants program
-    in do (CPU mem regs _ _ _) <- get
-          loadRegisters (regInit program)
+    in do loadRegisters (regInit program)
           setReg R15 org
-          setReg PC org
           codeEnd <- loadInstructions org instrs
           setBoundM CodeS (org, codeEnd)
           let dataStart = if null consts then (codeEnd + 4) 
@@ -62,9 +60,9 @@ loadInstructions addr (ins : inss)
 ----------------------------------------------------------------------
 loadConstants :: (MonadState CPU m, MonadIO m) => [(Address, Constant)] -> m ()
 loadConstants [] = return ()
-loadConstants ((addr, const) : consts)
-  = do loadConstant addr const
-       loadConstants consts
+loadConstants ((addr, cnst) : cnsts)
+  = do loadConstant addr cnst
+       loadConstants cnsts
 
 
 
@@ -95,12 +93,12 @@ loadConstant addr (Word w)
 ----------------------------------------------------------------------
 loadArray :: (MonadState CPU m, MonadIO m) => 
              Address -> Word32 -> Constant -> m ()
-loadArray addr 0 const
+loadArray _ 0 _
   = return ()
 
-loadArray addr count const
-  = do loadConstant addr const
-       loadArray (addr + constSize const) (count - 1) const
+loadArray addr count cnst
+  = do loadConstant addr cnst
+       loadArray (addr + constSize cnst) (count - 1) cnst
 
 
 
@@ -108,13 +106,13 @@ loadArray addr count const
 -- Load a list of constants into memory.
 ----------------------------------------------------------------------
 loadList :: (MonadState CPU m, MonadIO m) => Address -> [Constant] -> m ()
-loadList addr []
+loadList _ []
   = return ()
 
-loadList addr (const : consts)
-  = do loadConstant addr const
-       let addr' = constSize const + addr
-       loadList addr' consts
+loadList addr (cnst : cnsts)
+  = do loadConstant addr cnst
+       let addr' = constSize cnst + addr
+       loadList addr' cnsts
 
 
 
@@ -122,7 +120,7 @@ loadList addr (const : consts)
 -- Load a string into memory; null terminate the string.
 ----------------------------------------------------------------------
 loadString :: (MonadState CPU m, MonadIO m) => Address -> String -> m ()
-loadString addr [] = return ()
+loadString _ [] = return ()
 loadString addr [c1] = let w = fromIntegral (ord c1) in writeMem addr w
 
 loadString addr [c1, c2]

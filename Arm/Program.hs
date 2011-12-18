@@ -66,7 +66,6 @@ fixTestProgram p@(Program ms o ri inst cs) = (Program ms o ri binst cs)
                          (B (Rel o)) -> (B (Rel (fixOffset o l n)))
                          (Beq (Rel o)) -> (Beq (Rel (fixOffset o l n)))
                          (Bgt (Rel o)) -> (Bgt (Rel (fixOffset o l n)))
-                         (Bl (Rel o)) -> (Bl (Rel (fixOffset o l n)))
                          (Bne (Rel o)) -> (Bne (Rel (fixOffset o l n)))
                          _           -> i) : aux is (n+1)
                    

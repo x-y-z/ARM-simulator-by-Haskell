@@ -1,10 +1,10 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 {-#OPTIONS  -XFlexibleContexts #-}
 module Swi
 where
 
 import Data.Bits
 import Data.Char
-import Data.IORef
 import Data.Word
 
 import Control.Monad.State
@@ -14,6 +14,7 @@ import Memory (Address)
 import Loader
 import RegisterName
 
+line :: String
 line = "----------------------------------------"
 
 ----------------------------------------------------------------------
@@ -100,7 +101,7 @@ swi 11 debug
          else return ()
        stopRunning
 
-swi a debug = error $ "unknown SWI: " ++ show a ++ " " ++ show debug
+swi _ _ = liftIO $ putStrLn ("Unknown Swi code\n")
 
 ----------------------------------------------------------------------
 -- Fetch a string from memory.

@@ -92,9 +92,7 @@ decodeBranch word
                 0xE -> Just (B (Rel offset'))
                 _   -> Nothing
          0x1
-           -> case cond of
-                0xE -> Just (Bl (Rel offset'))
-                _   -> Nothing
+           -> Nothing
 
 ----------------------------------------
 decodeDataProc opcode destReg firstOp op2

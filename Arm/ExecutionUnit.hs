@@ -1,22 +1,16 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 {-#OPTIONS  -XFlexibleContexts #-}
 module ExecutionUnit
 where
   
 import Data.Bits
-import Data.Int
-import Data.IORef
-import Data.Word
 
 import Control.Monad.State
 
 import CPU
-import Decoder
-import Format
 import Instruction
-import Loader
 import Memory (Segment (DataS))
 import Operand
-import Program
 import RegisterName
 import Swi
 
@@ -79,16 +73,6 @@ eval (Bic (Reg reg1) (Reg reg2) (Reg reg3))
   = do r2 <- getReg reg2
        r3 <- getReg reg3
        setReg reg1 (r2 .&. (complement r3))
-
--- branch and link
-eval (Bl (Rel offset))
-  = do pc <- getReg R15
-       let pc' = pc - 4
-       let pc'' = if offset < 0
-                    then pc' - (fromIntegral (-offset))
-                    else pc' + (fromIntegral offset)
-       setReg R14 pc
-       setReg R15 pc''
 
 -- branch if less than
 eval (Blt (Rel offset))
@@ -277,17 +261,6 @@ evalInO (Bic (Reg reg1) (Reg reg2) (Reg reg3))
        r3 <- getReg reg3
        setReg reg1 (r2 .&. (complement r3))
 
--- branch and link
-evalInO (Bl (Rel offset))
-  = do pc <- getReg R15
-       let pc' = pc - 8
-       let pc'' = if offset < 0
-                    then pc' - (fromIntegral (-offset))
-                    else pc' + (fromIntegral offset)
-       setReg R14 pc
-       setReg R15 pc''
-       flushPipeline
-
 -- branch if less than
 evalInO (Blt (Rel offset))
   = do pc <- getReg R15
@@ -393,6 +366,7 @@ evalInO (Str (Reg reg1) op2)
            -> do addr <- getReg reg2
                  queueStore val (addr + bnd)
                  setReg reg2 (addr + bnd + offset)
+         _ -> liftIO $ putStrLn "Invalid Operand Type for Store"
 
 -- subtract two registers
 evalInO (Sub (Reg reg1) (Reg reg2) (Reg reg3))
@@ -403,3 +377,5 @@ evalInO (Sub (Reg reg1) (Reg reg2) (Reg reg3))
 -- software interrupt
 evalInO (Swi (Con isn))
    = swi isn False
+     
+evalInO _ = liftIO $ putStrLn "Invalid instruction operand format"

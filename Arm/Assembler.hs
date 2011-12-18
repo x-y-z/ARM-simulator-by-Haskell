@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 module Assembler
 where
 
@@ -17,8 +18,6 @@ data AsmResult
   | Err String
   deriving (Show)
 
-expandMacros l = l
-
 resolveSymbols
   :: Word32
   -> [ParseElement]
@@ -27,7 +26,7 @@ resolveSymbols
 resolveSymbols _ []
   = []
 
-resolveSymbols addr (Origin org : rest)
+resolveSymbols _ (Origin org : rest)
   = resolveSymbols org rest
 
 resolveSymbols addr (Symbol l : rest)
@@ -48,7 +47,6 @@ resolveSymbols addr (_ : rest)
   = resolveSymbols addr rest
 
 
-
 ----------------------------------------------------------------------
 -- Replace symbols with addresses.
 ----------------------------------------------------------------------
@@ -64,36 +62,35 @@ replaceSymbols
   -> Program
 
 ----------
-replaceSymbols [] line addr _ origin regBindings iAccum cAccum
+replaceSymbols [] _ addr _ orig regBindings iAccum cAccum
   = Program
       { memorySize = addr
-      , origin = origin
+      , origin = orig
       , regInit = reverse regBindings
       , instructions = reverse iAccum
       , constants = reverse cAccum
       }
 
 ----------
-replaceSymbols (Origin org : rest) line addr lTab origin 
+replaceSymbols (Origin org : rest) line _ lTab _ 
                regBindings iAccum cAccum
   = replaceSymbols rest line org lTab org regBindings iAccum cAccum
 
 ----------
-replaceSymbols (Instruction i : rest) line addr lTab origin 
+replaceSymbols (Instruction i : rest) line addr lTab orig 
                regBindings iAccum cAccum
   = let i' = case i of
                B   (Lab l) -> replaceBranch B   lTab addr line l
                Beq (Lab l) -> replaceBranch Beq lTab addr line l
                Bgt (Lab l) -> replaceBranch Bgt lTab addr line l
-               Bl  (Lab l) -> replaceBranch Bl  lTab addr line l
                Blt (Lab l) -> replaceBranch Blt lTab addr line l
                Bne (Lab l) -> replaceBranch Bne lTab addr line l
                _           -> i
-    in replaceSymbols rest line (addr + 4) lTab origin 
+    in replaceSymbols rest line (addr + 4) lTab orig 
        regBindings (i' : iAccum) cAccum
 
 ----------
-replaceSymbols (RegInit regName op : rest) line addr lTab origin 
+replaceSymbols (RegInit regName op : rest) line addr lTab orig 
                regBindings iAccum cAccum
   = let val = case op of
                 Lab label
@@ -103,26 +100,27 @@ replaceSymbols (RegInit regName op : rest) line addr lTab origin
                                    " does not exist, line " ++ show line)
                        Just label'
                          -> label'
-    in replaceSymbols rest line addr lTab origin 
+                _ -> error "Unknown Error"
+    in replaceSymbols rest line addr lTab orig
        ((regName, val) : regBindings) iAccum cAccum
 
 ----------
-replaceSymbols (Newline : rest) line addr lTab origin regBindings iAccum cAccum
-  = replaceSymbols rest (line + 1) addr lTab origin regBindings iAccum cAccum
+replaceSymbols (Newline : rest) line addr lTab orig regBindings iAccum cAccum
+  = replaceSymbols rest (line + 1) addr lTab orig regBindings iAccum cAccum
 
 ----------
-replaceSymbols (Data [] data' : rest) line addr lTab origin 
+replaceSymbols (Data [] data' : rest) line addr lTab orig 
                regBindings iAccum cAccum
   = let c = case data' of
               [c']
                 -> c'
               _ -> List data'
         size = constSize c
-    in replaceSymbols rest line (addr + size) lTab origin 
+    in replaceSymbols rest line (addr + size) lTab orig 
        regBindings iAccum ((addr, c) : cAccum)
 
 ----------
-replaceSymbols (Data [Lab label] data' : rest) line addr lTab origin 
+replaceSymbols (Data [Lab label] data' : rest) line addr lTab orig 
                regBindings iAccum cAccum
   = let c = case data' of
               [c']
@@ -135,12 +133,12 @@ replaceSymbols (Data [Lab label] data' : rest) line addr lTab origin
                               " does not exist, line " ++ show line)
                   Just addr''
                     -> addr''
-    in replaceSymbols rest line (addr + size) lTab origin 
+    in replaceSymbols rest line (addr + size) lTab orig
        regBindings iAccum ((addr', c) : cAccum)
 
 ----------
-replaceSymbols (_ : rest) line addr lTab origin regBindings iAccum cAccum
-  = replaceSymbols rest line addr lTab origin regBindings iAccum cAccum
+replaceSymbols (_ : rest) line addr lTab orig regBindings iAccum cAccum
+  = replaceSymbols rest line addr lTab orig regBindings iAccum cAccum
 
 
 
@@ -172,16 +170,18 @@ asmString progString
               in Left (replaceSymbols prog' 1 0 lTab 0 [] [] [])
          ((prog', str) : _)
            -> Right (errorMessage prog' str)
+         _ -> Right "Unknown error"
 
 
 
 ----------------------------------------------------------------------
 -- Generate an error message.
 ----------------------------------------------------------------------
+errorMessage :: [ParseElement] -> String -> [Char]
 errorMessage prog' remainingInput
-  = let lines = countLines prog' 1
+  = let lns = countLines prog' 1
         errLine = dropWhile isSpace (head (lines' remainingInput))
-    in ("error, line " ++ show lines ++ ": " ++ errLine)
+    in ("error, line " ++ show lns ++ ": " ++ errLine)
   where
     countLines [] accum
       = accum

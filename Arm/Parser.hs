@@ -289,7 +289,6 @@ pB     = ops1 "b"     B
 pBeq   = ops1 "beq"   Beq
 pBgt   = ops1 "bgt"   Bgt
 pBic   = ops3 "bic"   Bic
-pBl    = ops1 "bl"    Bl
 pBlt   = ops1 "blt"   Blt
 pBne   = ops1 "bne"   Bne
 pCmp   = ops2 "cmp"   Cmp
@@ -328,7 +327,7 @@ ops3 name instr
 -- Parse an instruction.
 ----------------------------------------------------------------------
 pInstr
-  = pAdd +++ pAnd +++ pB   +++ pBeq   +++ pBgt   +++ pBic   +++ pBl   +++ pBlt
+  = pAdd +++ pAnd +++ pB   +++ pBeq   +++ pBgt   +++ pBic   +++ pBlt
          +++ pBne +++ pCmp +++ pEor   +++ pLdr   +++ pMov
          +++ pMul +++ pOrr +++ pStr   +++ pSub  +++ pSwi
          +++ pLabel
