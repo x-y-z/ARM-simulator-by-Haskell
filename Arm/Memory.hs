@@ -89,7 +89,6 @@ class (CCache cache cl cdata addr idx set line tag valid struct) =>
       CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct
       | ch->cache, ch->cl where
       buildHierarchy :: [cl] -> ch
-      buildCache :: cl -> cache
 --      standardCache :: [cl]
       hasCache_ :: ch -> Bool 
       hasCache_ _ = False
@@ -148,19 +147,27 @@ instance CMemLayout MemLayout Segment Bound where
                                       Just _  -> Map.insert seg bnd mly
                                       Nothing -> error "segment fault"
 
+-- (Tag value, Valid bit (currently unused))
 type Line = (Word32, Bool)
+
 type Set = [Line]
+
+-- Maps from an index to a set (multiple cache lines)
 type CacheData = Map Word32 Set
+
 -- CacheLevel Size Block-Size Associativity Latency
 type CacheStruct = (Integer, Integer, Integer, Integer)
+
 data CacheLevel = CacheLevel CacheStruct
   deriving Show
+           
 data Cache = Cache CacheLevel CacheData deriving Show
 
+-- Describes a cache configuration to be turned into a CacheHierarchy
 type Hierarchy = [CacheLevel]
+
+-- Actual cache hierarchy used by the CPU
 type CacheHierarchy = [Cache]
-
-
 
 instance CLine Line Word32 Bool   
     
@@ -169,10 +176,8 @@ instance CSet Set Line Word32 Bool where
                                  else aux s tag
             where aux []     t = [(t, False)]
                   aux (_:ls) t = ls ++ [(t,False)] 
-                  -- this causes LRU replacement      
-
-
-
+                  -- this causes LRU replacement
+                  
 instance CCacheData CacheData Word32 Set Line Word32 Bool where
          insertInCacheData_ cdata idx tag 
            = if Map.member idx cdata 
@@ -181,21 +186,26 @@ instance CCacheData CacheData Word32 Set Line Word32 Bool where
              else Map.insert idx (insertInSet_ [] tag) cdata
          inCacheData_ idx tag cdata = (Map.member idx cdata) && 
                                       (any (\(t, _) -> t == tag) lns)
-           where lns = cdata Map.! idx  -- is this OK? If idx is not in cdata
+           where lns = cdata Map.! idx -- Lazy evaluation win
          emptyCacheData_ = Map.empty
 
-
 instance CCacheLevel CacheLevel CacheStruct Word32 where
+         -- Standard L1 (Direct-mapped), L2 (Associative), and L2 caches
          stdL1Cache_ = CacheLevel (32768,32,1,10)
          stdL2Cache_ = CacheLevel (4194304,128,2,100)
          stdL1ACache_ = CacheLevel (32768,32,4,16)
+         
          latency_ (CacheLevel (_,_,_,l)) = l
+         
+         -- Functions for computing tag, index, and offset from an address
+         -- address ==> [ tag | index | offset ]
          offsetBits_ (CacheLevel (_,b,_,_)) = round $ logBase 2 (fromInteger b)
          indexBits_ (CacheLevel (si,bi,ai,_)) = round $ logBase 2 (s / (b * a))
            where s = fromInteger si
                  b = fromInteger bi
                  a = fromInteger ai 
          tagBits_ c = 32 - (indexBits_ c) - (offsetBits_ c)
+         
          getTag_ addr c = shiftR addr (32 - (tagBits_ c))
          getIndex_ addr c = a Data.Bits..&. mask
             where a = shiftR addr (offsetBits_ c)
@@ -220,8 +230,10 @@ instance CCacheHierarchy CacheHierarchy Cache CacheLevel CacheData
                          Word32 Word32 Set
          Line Word32 Bool CacheStruct where
          buildHierarchy []     = []
-         buildHierarchy (x:xs) = (Cache x emptyCacheData_): (buildHierarchy xs)
-         buildCache x = (Cache x emptyCacheData_)
+         -- Builds a CacheHierarchy from a list
+         -- of CacheLevels (cache descriptions)
+         buildHierarchy (x:xs) = (Cache x emptyCacheData_) 
+                                 : (buildHierarchy xs)
          hasCache_ _ = True
 
 standardCache :: Hierarchy
@@ -277,7 +289,7 @@ testIndex = TestList [ getIndex_ 0x00000020 testCL ~?= 1,
 testTag :: Test
 testTag = TestList [ getTag_ 0x00008000 testCL ~?= 1 ]
 
--- Check that 
+-- Check that the split address sums to the original address
 prop_address_bits :: Address -> Property
 prop_address_bits a = 
   property $ (shiftL (getTag_ a c) ts) + 
