@@ -27,7 +27,8 @@ import qualified Data.Map as Map
 import Data.Bits
 import Data.Word
 
-
+import Test.QuickCheck
+import Test.HUnit
 
 ---------------------------
 -- classes
@@ -64,6 +65,7 @@ class (CSet set line tag valid) => CCacheData cdata idx set line tag valid
 class CCacheLevel cl struct addr|cl->struct, cl->addr where
       stdL1Cache_ :: cl
       stdL2Cache_ :: cl
+      stdL1ACache_ :: cl
       latency_ :: cl -> Integer
       offsetBits_ :: cl -> Int
       indexBits_ :: cl -> Int
@@ -84,6 +86,7 @@ class (CCache cache cl cdata addr idx set line tag valid struct) =>
       CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct
       | ch->cache, ch->cl where
       buildHierarchy :: [cl] -> ch
+      buildCache :: cl -> cache
 --      standardCache :: [cl]
       hasCache_ :: ch -> Bool 
       hasCache_ _ = False
@@ -183,6 +186,7 @@ instance CCacheData CacheData Word32 Set Line Word32 Bool where
 instance CCacheLevel CacheLevel CacheStruct Word32 where
          stdL1Cache_ = CacheLevel (32768,32,1,10)
          stdL2Cache_ = CacheLevel (4194304,128,2,100)
+         stdL1ACache_ = CacheLevel (32768,32,4,16)
          latency_ (CacheLevel (_,_,_,l)) = l
          offsetBits_ (CacheLevel (_,b,_,_)) = round $ logBase 2 (fromInteger b)
          indexBits_ (CacheLevel (si,bi,ai,_)) = round $ logBase 2 (s / (b * a))
@@ -191,7 +195,7 @@ instance CCacheLevel CacheLevel CacheStruct Word32 where
                  a = fromInteger ai 
          tagBits_ c = 32 - (indexBits_ c) - (offsetBits_ c)
          getTag_ addr c = shiftR addr (32 - (tagBits_ c))
-         getIndex_ addr c = a .&. mask
+         getIndex_ addr c = a Data.Bits..&. mask
             where a = shiftR addr (offsetBits_ c)
                   mask = complement $ shiftL (complement (0::Word32)) 
                                              (indexBits_ c)
@@ -215,12 +219,17 @@ instance CCacheHierarchy CacheHierarchy Cache CacheLevel CacheData
          Line Word32 Bool CacheStruct where
          buildHierarchy []     = []
          buildHierarchy (x:xs) = (Cache x emptyCacheData_): (buildHierarchy xs)
+         buildCache x = (Cache x emptyCacheData_)
          hasCache_ _ = True
 
 standardCache :: Hierarchy
 standardCache = [stdL1Cache_, stdL2Cache_]
 
+testCL :: CacheLevel
+testCL = stdL1Cache_
 
+testCLA :: CacheLevel
+testCLA = stdL1ACache_
 
 instance CMemory Memory CacheHierarchy MemLayout MemData 
                  Cache CacheLevel CacheData 
@@ -232,3 +241,40 @@ instance CMemory Memory CacheHierarchy MemLayout MemData
          setMemData_ memory mdata = memory {mem = mdata}
          getCacheH_ mem = cache mem
          setCacheH_ mem ch = mem {cache = ch}
+
+testDMCache :: Cache
+testDMCache = (Cache testCL emptyCacheData_)
+
+testACache :: Cache
+testACache = (Cache testCLA emptyCacheData_)
+
+prop_dm_cache_insert :: Address -> Property
+prop_dm_cache_insert a = property $ inCache_ (insertInCache_ testDMCache a) a
+
+prop_a_cache_insert :: Address -> Property
+prop_a_cache_insert a = property $ inCache_ (insertInCache_ testACache a) a
+
+cacheTests :: Test
+cacheTests = TestList [ testOffset, testIndex, testTag ]
+
+testOffset :: Test
+testOffset = TestList [ getOffset_ 0x00000001 testCL ~?= 1, 
+                        getOffset_ 0x00000020 testCL ~?= 0 ]
+
+testIndex :: Test
+testIndex = TestList [ getIndex_ 0x00000020 testCL ~?= 1,
+                       getIndex_ 0x0000001F testCL ~?= 0,
+                       getIndex_ 0x00008000 testCL ~?= 0 ]
+            
+testTag :: Test
+testTag = TestList [ getTag_ 0x00008000 testCL ~?= 1 ]
+
+-- Check that 
+prop_address_bits :: Address -> Property
+prop_address_bits a = 
+  property $ (shiftL (getTag_ a c) ts) + 
+  (shiftL (getIndex_ a c) is) + getOffset_ a c == a
+  where
+    c = testCL
+    ts = (indexBits_ c) + is
+    is = offsetBits_ c

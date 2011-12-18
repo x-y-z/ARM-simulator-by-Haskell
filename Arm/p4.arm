@@ -1,0 +1,22 @@
+;---------------------------------------------------------------------
+;- FILE:              p1.arm
+;- DESCRIPTION:       
+;- DATE:              04/04/2001
+;- PROJECT:           
+;- LANGUAGE PLATFORM: HARM (was VARM (Virtual ARM)), for CSE240 Spring 2001
+;- OS PLATFORM:       RedHat Linux 6.2
+;- AUTHOR:            Jeffrey A. Meunier
+;- EMAIL:             jeffm@cse.uconn.edu
+;---------------------------------------------------------------------
+
+
+            origin 16
+
+TOP:        mov r1, #0
+ADD:	    add r1, r1, #1
+	    b ADD
+            swi #11
+
+;---------------------------------------------------------------------
+;- eof
+;---------------------------------------------------------------------
