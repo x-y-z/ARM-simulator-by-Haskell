@@ -106,6 +106,7 @@ eval (Cmp (Reg reg1) op2)
                  Con c -> return (fromIntegral c)
                  Reg r -> do r' <- getReg r
                              return (fromIntegral r')
+                 _ -> fail "Invalid operand type for Cmp"
        setReg CPSR 0
        if val1 < val2
          then cpsrSetN
@@ -145,11 +146,12 @@ eval (Ldr (Reg reg1) op2)
                         -- write addr + offset back into reg2
                         setReg reg2 (addr + offset)  
                         readMem addr
+                _ -> fail "Invalid operand type for Load"
        setReg reg1 val         
 
 -- move constant into register
-eval (Mov (Reg reg) (Con con))
-  = setReg reg con
+eval (Mov (Reg r) (Con con))
+  = setReg r con
 
 -- move register into register
 eval (Mov (Reg reg1) (Reg reg2))
@@ -189,6 +191,7 @@ eval (Str (Reg reg1) op2)
                  writeMem (addr + bnd) val
                  -- write addr + offset back into reg2
                  setReg reg2 (addr + bnd + offset)
+         _ -> liftIO $ putStrLn "Invalid operand format for Store"
 
 -- subtract two registers
 eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
@@ -198,9 +201,10 @@ eval (Sub (Reg reg1) (Reg reg2) (Reg reg3))
 
 -- software interrupt
 eval (Swi (Con isn))
- = do cpu <- get
-      dbg <- isDebug
-      swi isn dbg
+ = do db <- isDebug
+      swi isn db
+      
+eval _ = liftIO $ putStrLn "Invalid operand type"
 
 
 evalInO :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
@@ -293,6 +297,7 @@ evalInO (Cmp (Reg reg1) op2)
                  Con c -> return (fromIntegral c)
                  Reg r -> do r' <- getReg r
                              return (fromIntegral r')
+                 _ -> fail "Incorrect operand type for Cmp"
        setReg CPSR 0
        if val1 < val2
          then cpsrSetN
@@ -308,26 +313,27 @@ evalInO (Eor (Reg reg1) (Reg reg2) (Reg reg3))
          
 -- load register
 evalInO (Ldr (Reg reg1) op2)
-  = do addr <- case op2 of
-                Ind reg2
-                  -> do addr <- getReg reg2
-                        queueLoad reg1 addr
-                Bas reg2 offset
-                  -> do addr <- getReg reg2
-                        queueLoad reg1 (addr + offset)
-                Aut (Bas reg2 offset)
-                  -> do addr <- getReg reg2
-                        setReg reg2 (addr + offset)
-                        queueLoad reg1 (addr + offset)
-                Pos (Ind reg2) offset
-                  -> do addr <- getReg reg2
-                        setReg reg2 (addr + offset)
-                        queueLoad reg1 addr
+  = do case op2 of
+         Ind reg2
+           -> do addr <- getReg reg2
+                 queueLoad reg1 addr
+         Bas reg2 offset
+           -> do addr <- getReg reg2
+                 queueLoad reg1 (addr + offset)
+         Aut (Bas reg2 offset)
+           -> do addr <- getReg reg2
+                 setReg reg2 (addr + offset)
+                 queueLoad reg1 (addr + offset)
+         Pos (Ind reg2) offset
+           -> do addr <- getReg reg2
+                 setReg reg2 (addr + offset)
+                 queueLoad reg1 addr
+         _ -> liftIO $ putStrLn "Invalid instruction operand format for Load"
        return ()
 
 -- move constant into register
-evalInO (Mov (Reg reg) (Con con))
-  = setReg reg con
+evalInO (Mov (Reg r) (Con con))
+  = setReg r con
 
 -- move register into register
 evalInO (Mov (Reg reg1) (Reg reg2))

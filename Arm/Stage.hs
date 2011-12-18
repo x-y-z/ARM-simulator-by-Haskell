@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 {-#OPTIONS -XRankNTypes -XFlexibleContexts -XImpredicativeTypes#-}
 module Stage
 where       
@@ -23,7 +24,7 @@ setFD :: (MonadState CPU m, MonadIO m) => Word32 -> m ()
 setFD i = do (CPU _ _ _ _ a) <- get
              case a of
                   Nil -> fail "Need In-Order auxilary data"
-                  (InO fd de em ew) -> setAuxilary (InO (i : fd) de em ew)
+                  (InO f d m w) -> setAuxilary (InO (f ++ [i]) d m w)
 
 fetch :: Stage
 fetch = do pc <- getReg R15
@@ -47,25 +48,25 @@ getFD :: (MonadState CPU m, MonadIO m) => m (Maybe Word32)
 getFD = do (CPU _ _ _ _ a) <- get
            case a of
              Nil -> fail "Need In-Order auxilary data"
-             (InO fd de em ew) -> case fd of
+             (InO f d m w) -> case f of
                [] -> return Nothing
-               (x : xs) -> do setAuxilary (InO xs de em ew)
+               (x : xs) -> do setAuxilary (InO xs d m w)
                               return (Just x)
 
 setDE :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
 setDE i = do (CPU _ _ _ _ a) <- get
              case a of
                Nil -> fail "Need In-Order auxilary data"
-               (InO fd de em ew) -> setAuxilary (InO fd (i : de) em ew)
+               (InO f d m w) -> setAuxilary (InO f (d ++ [i]) m w)
 
 
 getDE :: (MonadState CPU m, MonadIO m) => m (Maybe Instruction)
 getDE = do (CPU _ _ _ _ a) <- get
            case a of
              Nil -> fail "Need In-Order auxilary data"
-             (InO fd de em ew) -> case de of
+             (InO f d m w) -> case d of
                [] -> return Nothing
-               (x : xs) -> do setAuxilary (InO fd xs em ew)
+               (x : xs) -> do setAuxilary (InO f xs m w)
                               return (Just x)
 
 decode :: Stage
@@ -130,7 +131,7 @@ singleStage = do pc <- getReg R15
                                         else
                    do nextCycle
                       case (Decoder.decode opcode) of
-                        Nothing -> liftIO $ putStrLn "ERROR: can't decode instruction"
+                        Nothing -> incrCounter "DecodeFailures"
                         Just i -> do setReg R15 (pc + 4)
                                      nextCycle
                                      eval i
