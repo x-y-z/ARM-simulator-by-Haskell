@@ -55,7 +55,8 @@ class (Ord name, Show val) => CRegisters reg name val|reg->name, reg->val where
                                     " C=" ++ show c ++ 
                                     " V=" ++ show v)
 
-class (Ord addr, Show datum) => CMemData mem addr datum|mem->addr, mem->datum where
+class (Ord addr, Show datum) => CMemData mem addr datum
+      |mem->addr, mem->datum, addr->mem, addr->datum where
       emptyMem_ ::mem
       align_ :: addr -> addr
       getMemWord_ :: mem -> addr -> datum
@@ -106,8 +107,8 @@ class (CCache cache cl cdata addr idx set line tag valid struct) =>
       | ch->cache, ch->cl where
       buildHierarchy :: [cl] -> ch
       standardCache :: [cl]
-      hasCache :: ch -> Bool 
-      hasCache _ = False
+      hasCache_ :: ch -> Bool 
+      hasCache_ _ = False
 
 class (CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct, 
        CMemData memdata addr datum, CMemLayout memlayout seg bnd) =>
@@ -127,25 +128,6 @@ class CCounter cnt name val|cnt->name, cnt->val where
       emptyCounters_ :: cnt
 
 
-
--- temporary CPU, revision needed
-{-class (CDebug dbg, CRegisters rs rn rd, 
-       CMemData md maddr mdata, CMemLayout ml mseg mbnd)=>
-     CCPU cpu dbg rs md ml rn rd maddr mdata mseg mbnd
-     |cpu -> dbg, cpu -> rs, cpu -> md, cpu -> ml where
-     getAuxilary :: cpu -> Auxilary
-      
-data CPU = CPU MemData MemLayout Debug Registers Auxilary
-
-instance CCPU CPU Debug Registers MemData MemLayout RegisterName Word32 Word32 Word32 Segment Bound where
-
- cpu->ch, cpu->memlayout, 
-        cpu->memdata, cpu->cache, cpu->cl, cpu->cdata, cpu->addr, cpu->idx,
-        cpu->set, cpu->line, cpu->tag, cpu->valid, cpu->struct, cpu->datum, 
-        cpu->seg, cpu->bnd, cpu->rname, cpu->rval, cpu->cname, cpu->cval,
-
--}
-
 class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx 
        set line tag valid struct datum seg bnd, CRegisters reg rname rval,  
        CCounter cnt cname cval, MonadState cpu m, MonadIO m) => 
@@ -153,66 +135,121 @@ class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx
        set line tag valid struct datum seg bnd rname rval cname cval m
        |cpu->memory, cpu->reg, cpu->dbg, cpu->cnt, cpu->m where
 -- cpu
-       getRegFile :: cpu -> reg
-       setRegFile :: cpu -> reg -> cpu
-       getMem :: cpu -> memory
-       setMem :: cpu -> memory -> cpu
-       getDbg :: cpu -> dbg
-       setDbg :: cpu -> dbg -> cpu
-       getCnt :: cpu -> cnt
-       setCnt :: cpu -> cnt -> cpu
-       getAux :: cpu -> Auxilary         -- ad hoc function
-       setAux :: cpu -> Auxilary -> cpu  -- ad hoc function
+       getRegFile_ :: cpu -> reg
+       setRegFile_ :: cpu -> reg -> cpu
+       getMem_ :: cpu -> memory
+       setMem_ :: cpu -> memory -> cpu
+       getDebug_ :: cpu -> dbg
+       setDebug_ :: cpu -> dbg -> cpu
+       getCnt_ :: cpu -> cnt
+       setCnt_ :: cpu -> cnt -> cpu
+       getAux_ :: cpu -> Auxilary         -- ad hoc function
+       setAux_ :: cpu -> Auxilary -> cpu  -- ad hoc function
 -- registers
        cpsrGet :: Int -> m rval
        cpsrSet :: Int -> m ()
--- memory
-       setBound :: seg -> bnd -> m ()
-       setBound s b = do cpu <- get
-                         let m = getMem cpu
-                         let lyt = getMemLayout_ m
-                         let lyt' = setBound_ lyt s b
-                         let m' = setMemLayout_ m lyt'
-                         put $ setMem cpu m'
-                         return ()
-       getBound :: seg -> m bnd
-       getBound s = do cpu <- get
-                       let m = getMem cpu
-                       let lyt = getMemLayout_ m
-                       return $ getBound_ lyt s
-       setBoundM :: seg -> (addr, addr) -> m ()
-       getBoundM :: seg -> m (addr, addr)
-       getMemWord :: addr -> m datum
-       getMemWord addr = do cpu <- get
-                            let md = getMemData_ $ getMem cpu
-                            return $ getMemWord_ md addr
-       setMemWord :: addr -> datum -> m ()
-       setMemWord a d = do cpu <- get
-                           let m = getMem cpu
-                           let md = getMemData_ m
-                           let md' = setMemWord_ md a d
-                           let m' = setMemData_ m md'
-                           let cpu' = setMem cpu m'
-                           put cpu'
-       readMem :: addr -> m datum
---       readMem addr = 
-       writeMem :: addr -> datum -> m ()
 -- cache
        loadCache :: addr -> m Integer
        updateCache :: addr -> m ()
-                           
+-- memory 
+       setBoundM :: seg -> (addr, addr) -> m ()
+       getBoundM :: seg -> m (addr, addr)
+-- auxilary
+       setAuxilary :: Auxilary -> m ()
+       setAuxilary aux = do c <- get
+                            let c' = setAux_ c aux
+                            put c
+       flushPipeLine :: m ()
+--       emptyAux :: Auxilary
+       queueLoad :: rname -> addr -> m ()
+       queueStore :: rname -> addr -> m ()
+       getLoad :: m (Maybe (rname, addr))
+       getStore :: m (Maybe (rname, addr))
 
+-- counters
+       stallForN :: cval -> m ()
+       stallCycle :: m cval
+       currentCycle :: m cval
+       nextCycle :: m ()
+       startRunning :: m ()
+       stopRunning :: m ()
+       isRunning :: m Bool
+
+
+-- counters
+       emptyCounters :: cnt
+       emptyCounters = emptyCounters_
+       getCounter :: cname -> m cval
+       getCounter n = do c <- get
+                         let counter = getCnt_ c
+                         return $ getCounter_ counter n
+       setCounter :: cname -> cval -> m ()
+       setCounter n v = do c <- get
+                           let counter = getCnt_ c
+                           let counter' = setCounter_ counter n v
+                           let c' = setCnt_ c counter'
+                           put c'
+-- memory
+       setBound :: seg -> bnd -> m ()
+       setBound s b = do cpu <- get
+                         let m = getMem_ cpu
+                         let lyt = getMemLayout_ m
+                         let lyt' = setBound_ lyt s b
+                         let m' = setMemLayout_ m lyt'
+                         put $ setMem_ cpu m'
+                         return ()
+       getBound :: seg -> m bnd
+       getBound s = do cpu <- get
+                       let m = getMem_ cpu
+                       let lyt = getMemLayout_ m
+                       return $ getBound_ lyt s
+       getMemWord :: addr -> m datum
+       getMemWord addr = do cpu <- get
+                            let md = getMemData_ $ getMem_ cpu
+                            return $ getMemWord_ md addr
+       setMemWord :: addr -> datum -> m ()
+       setMemWord a d = do cpu <- get
+                           let m = getMem_ cpu
+                           let md = getMemData_ m
+                           let md' = setMemWord_ md a d
+                           let m' = setMemData_ m md'
+                           let cpu' = setMem_ cpu m'
+                           put cpu'
+       readMem :: addr -> m datum
+       readMem addr = do val <- getMemWord (align_ addr)
+                         yesCache <- hasCache
+                         if yesCache 
+                         then do lat <- loadCache addr
+                                 updateCache addr
+                                 return val
+                         else return val
+                         
+       writeMem :: addr -> datum -> m ()
+       writeMem a d = do updateCache a
+                         setMemWord (align_ a) d
+-- cache
+       hasCache :: m Bool
+       hasCache = do cpu <- get
+                     let mem = getMem_ cpu
+                     let ch = getCacheH_ mem
+                     return $ hasCache_ ch
+                           
+-- debug
+       isDebug :: m Bool
+       isDebug = do c <- get
+                    let d = getDebug_ c
+                    return $ isDebug_ d
 
 -- registers
        getReg :: rname -> m rval
        getReg regname = do c <- get
-                           let rs = getRegFile c
+                           let rs = getRegFile_ c
                            return $ getReg_ rs regname
        setReg :: rname -> rval -> m ()
        setReg name val = do c <- get
-                            let rs = getRegFile c
+                            let rs = getRegFile_ c
                             let rs' = setReg_ rs name val
-                            put $ setRegFile c rs'
+                            put $ setRegFile_ c rs'
        cpsrGetN, cpsrGetZ, cpsrGetC, cpsrGetV :: m rval
        cpsrGetN = cpsrGet 31
        cpsrGetZ = cpsrGet 30
@@ -358,25 +395,18 @@ instance CCache Cache CacheLevel CacheData Word32 Word32 Set Line Word32 Bool Ca
            where idx = getIndex_ addr lev
                  tag = getTag_ addr lev
 
-{-class (CCache cache cl cdata addr idx set line tag valid struct) => 
-      CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct
-      | ch->cache, ch->cl where
-      buildHierarchy :: [cl] -> ch
-      standardCache :: [cl]-}
+
 instance CCacheHierarchy CacheHierarchy Cache CacheLevel CacheData Word32 Word32 Set
          Line Word32 Bool CacheStruct where
          buildHierarchy []     = []
          buildHierarchy (x:xs) = (Cache x emptyCacheData_): (buildHierarchy xs)
 
          standardCache = [stdL1Cache_, stdL2Cache_]
-         hasCache _ = True
+         hasCache_ _ = True
 
 
 type Counters = Map String Integer
 
-{-class CCounter cnt name val where
-      getCounter_ :: cnt -> name -> val
-      setCounter_ :: cnt -> name -> val -> cnt-}
 instance CCounter Counters String Integer where
          emptyCounters_ = Map.fromList [("StallUntil", 0),("Cycles", 0)]
          getCounter_ cnt id = if Map.member id cnt
@@ -389,11 +419,7 @@ data Memory = Mem { cache :: CacheHierarchy,
                     layout :: MemLayout,
                     mem :: MemData} deriving Show
 
-{-class (CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct, 
-       CMemData memdata addr datum, CMemLayout memlayout seg bnd) =>
-       CMemory memory ch memlayout memdata cache cl cdata addr idx 
-               set line tag valid struct datum seg bnd
-       |memory->ch, memory->memlayout, memory->memdata-}
+
 instance CMemory Memory CacheHierarchy MemLayout MemData Cache CacheLevel CacheData 
          Word32 Word32 Set Line Word32 Bool CacheStruct Word32 Segment Bound where
          getMemLayout_ mem = layout mem
@@ -409,26 +435,97 @@ data Auxilary =
   | InO {fd :: [Word32], de :: [Instruction], em :: [(RegisterName,Address)], ew :: [(RegisterName,Address)]}
   deriving Show
 
+emptyAux :: Auxilary
+emptyAux = InO [] [] [] []
 
 
-data CPU = CPU Memory Registers Debug Counters Auxilary
-{- MonadState cpu m, MonadIO m) => 
-       CCPU cpu memory reg dbg cnt ch memlayout memdata cache cl cdata addr idx 
-       set line tag valid struct datum seg bnd rname rval cname cval m-}
-{-
-instance  (MonadState CPU m, MonadIO m) => 
-          CCPU CPU Memory Registers Debug Counters CacheHierarchy MemLayout MemData
-              Cache CacheLevel CacheData Word32 Word32 Set Line Word32 Bool 
-              CacheStruct Word32 Segment Bound RegisterName Word32 String Integer m
-          where
--}
+data CPU = CPU { mems :: Memory,
+                 reg :: Registers,
+                 dbg :: Debug,
+                 cnt :: Counters,
+                 aux :: Auxilary }
 
-{-
-type CacheDummy = Int
 
-instance CCacheHierarchy CacheDummy undefined undefined undefined undefined undefined 
-         undefined undefined undefined undefined undefined where
-         buildHierarchy = undefined
-         standardCache = undefined
-         hasCache _ = True
--}
+instance (MonadState CPU m, MonadIO m) =>
+         CCPU CPU Memory Registers Debug Counters CacheHierarchy MemLayout MemData
+         Cache CacheLevel CacheData Word32 Word32 Set Line Word32 Bool
+         CacheStruct Word32 Segment Bound RegisterName Word32 String Integer m
+         where
+       getRegFile_ c = reg c
+       setRegFile_ c r = c {reg = r}
+       getMem_ c = mems c
+       setMem_ c m = c {mems = m}
+       getDebug_ c = dbg c
+       setDebug_ c d = c {dbg = d}
+       getCnt_ c = cnt c
+       setCnt_ c cn = c {cnt = cn}
+       getAux_ c = aux c         -- ad hoc function
+       setAux_ c a = c {aux = a} -- ad hoc function
+-- registers
+       cpsrGet bit = do cpsr <- getReg CPSR
+                        if cpsr `testBit` bit then return 1 else return 0
+       cpsrSet bit = do cpsr <- getReg CPSR
+                        let cpsr' = cpsr `setBit` bit
+                        setReg CPSR cpsr'
+-- cache
+       loadCache addr = do cpu <- get
+                           let c = cache (mems cpu)
+                           return $ foldr f 1000 c
+         where f cache@(Cache lev ls) i = if inCache_ cache addr
+                                          then min (latency_ lev) i else i
+       updateCache addr = do cpu <- get
+                             let m = mems cpu
+                             let c = getCacheH_ m
+                             let c' = (foldr 
+                                        (\c cs -> (insertInCache_ c addr) : cs) [] c) 
+                             let m' = setCacheH_ m c'
+                             put cpu {mems = m'} 
+-- memory 
+       setBoundM seg bnd = do cpu <- get
+                              let m = mems cpu
+                              let b = getMemLayout_ m
+                              let b' = setBound_ b seg (Bound (fst bnd) (snd bnd))
+                              let m' = setMemLayout_ m b'
+                              put cpu {mems = m'}
+
+       getBoundM seg = do cpu <- get
+                          let b = getMemLayout_ $ mems cpu
+                          let bnd = getBound_ b seg
+                          return (lowerB bnd, upperB bnd)
+-- auxilary
+       flushPipeLine = setAuxilary emptyAux
+--       emptyAux :: Auxilary
+       queueLoad reg addr = do (CPU _ _ _ _ aux) <- get
+                               case aux of
+                                 Nil -> fail "Need In-order auxilary data"
+                                 (InO fd de em ew) -> 
+                                   setAuxilary (InO fd de (em ++ [(reg,addr)]) ew)
+       queueStore reg addr = do (CPU _ _ _ _ aux) <- get
+                                case aux of
+                                  Nil -> fail "Need In-order auxilary data"
+                                  (InO fd de em ew) -> 
+                                    setAuxilary (InO fd de em (ew ++ [(reg,addr)]))
+       getLoad = do (CPU _ _ _ _ aux) <- get
+                    case aux of
+                      Nil -> fail "Need In-order auxilary data"
+                      (InO _ _ [] _) -> return Nothing
+                      (InO fd de (x:xs) ew) -> do setAuxilary (InO fd de xs ew)
+                                                  return (Just x)
+       getStore = do (CPU _ _ _ _ aux) <- get
+                     case aux of
+                       Nil -> fail "Need In-order auxilary data"
+                       (InO _ _ _ []) -> return Nothing
+                       (InO fd de em (x:xs)) -> do setAuxilary (InO fd de em xs)
+                                                   return (Just x)
+
+-- counters
+       stallForN n = do cyc <- currentCycle
+                        setCounter "StallUntil" (cyc + n)
+       stallCycle = getCounter "StallUntil"
+       currentCycle = getCounter "Cycles"
+       nextCycle = do cyc <- getCounter "Cycles"
+                      setCounter "Cycles" (cyc + 1)
+       startRunning = setCounter "Running" 1
+       stopRunning = setCounter "Running" 0
+       isRunning = do r <- getCounter "Running"
+                      return $ r == 1
