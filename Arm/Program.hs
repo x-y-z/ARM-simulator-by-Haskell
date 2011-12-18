@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 module Program
 where
 
@@ -8,7 +9,6 @@ import Control.Monad
 import Test.QuickCheck
 
 import Instruction
-import CPU
 import Operand
 import Memory (Address)
 import RegisterName
@@ -56,20 +56,22 @@ arbProg = do regs <- arbitrary
 
 -- Takes an arbitrary test program and fixes its addresses, offsets, etc.
 fixTestProgram :: Program -> Program
-fixTestProgram p@(Program ms o ri inst cs) = (Program ms o ri binst cs)
+fixTestProgram (Program ms o ri inst cs) = (Program ms o ri binst cs)
   where
-    ninst = inst ++ [(Swi (Con 11))] -- Adding a clean exit at the end of the program
+    -- Adding a clean exit at the end of the program
+    ninst = inst ++ [(Swi (Con 11))]
     l = (length ninst * 4) - 8
-    binst = aux ninst 0
-    aux [] n       = []
-    aux (i : is) n = (case i of 
-                         (B (Rel o)) -> (B (Rel (fixOffset o l n)))
-                         (Beq (Rel o)) -> (Beq (Rel (fixOffset o l n)))
-                         (Bgt (Rel o)) -> (Bgt (Rel (fixOffset o l n)))
-                         (Bne (Rel o)) -> (Bne (Rel (fixOffset o l n)))
-                         _           -> i) : aux is (n+1)
+    binst = f ninst 0
+    f [] _       = []
+    f (i : is) n = (case i of 
+                       (B (Rel off)) -> (B (Rel (fixOffset off l n)))
+                       (Beq (Rel off)) -> (Beq (Rel (fixOffset off l n)))
+                       (Bgt (Rel off)) -> (Bgt (Rel (fixOffset off l n)))
+                       (Bne (Rel off)) -> (Bne (Rel (fixOffset off l n)))
+                       _           -> i) : f is (n+1)
                    
--- Need to align branches so that we don't branch out of the instruction range
+-- Need to align branches so that we don't branch out of 
+-- the instruction range
 fixOffset :: Int -> Int -> Int -> Int
 fixOffset o l n = if x > l then y else 
                     if x < 0 then z else x

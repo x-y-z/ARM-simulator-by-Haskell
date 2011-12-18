@@ -1,6 +1,7 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 module RegisterName
   ( RegisterName(..)
-  , nthReg
+  , nthReg , read'
   )
 where
 
@@ -64,6 +65,7 @@ nthReg _  = undefined
 ----------------------------------------------------------------------
 -- Convert a register name to a string.
 ----------------------------------------------------------------------
+show' :: RegisterName -> String
 show' R0   = "r0"
 show' R1   = "r1"
 show' R2   = "r2"
@@ -85,6 +87,7 @@ show' CPSR = "cpsr"
 ----------------------------------------------------------------------
 -- Convert a string to a register name.
 ----------------------------------------------------------------------
+read' :: String -> RegisterName
 read' "r0"   = R0
 read' "r1"   = R1
 read' "r2"   = R2
@@ -102,3 +105,4 @@ read' "r13"  = R13
 read' "r14"  = R14
 read' "r15"  = R15
 read' "cpsr" = CPSR
+read' _ = undefined

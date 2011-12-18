@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 module Instruction
 where
 
@@ -8,7 +9,6 @@ import Control.Monad
 import Test.QuickCheck
 
 import Operand
-import RegisterName
 
 data Instruction
   = Add   Operand Operand Operand

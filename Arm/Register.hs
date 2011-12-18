@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 {-#OPTIONS -XMultiParamTypeClasses -XTypeSynonymInstances -XFlexibleContexts -XFunctionalDependencies -XFlexibleInstances -XUndecidableInstances#-}
 module Register (
                  ----functions
@@ -5,7 +6,10 @@ module Register (
                  ----data structures
                  Registers, emptyRegs,
                  ----classes
-                 CRegisters
+                 CRegisters,
+                 prop_cpsr_get_set,
+                 prop_reg_get_set,
+                 getNsetReg
                 )
 where
 
@@ -97,14 +101,14 @@ instance CRegisters Registers RegisterName Word32  where
                                   (R9,0), (R10,0),(R11,0),
                                   (R12,0),(R13,0),(R14,0),
                                   (R15,0),(CPSR,0)]
-         getReg_ rs id = rs Map.! id
+         getReg_ rs idx = rs Map.! idx
 
-         setReg_ rs id val = Map.insert id val rs
-         cpsrGet_ rs bit = if cpsr `testBit` bit then 1 else 0
-                 where cpsr = getReg_ rs CPSR
-         cpsrSet_ rs bit = let cpsr = getReg_ rs CPSR
-                               cpsr' = cpsr `setBit` bit
-                           in setReg_ rs CPSR cpsr'
+         setReg_ rs idx val = Map.insert idx val rs
+         cpsrGet_ rs bitx = if cpsr `testBit` bitx then 1 else 0
+           where cpsr = getReg_ rs CPSR
+         cpsrSet_ rs bitx = let cpsr = getReg_ rs CPSR
+                                cpsr' = cpsr `setBit` bitx
+                            in setReg_ rs CPSR cpsr'
 
 ----------------------
 -- test

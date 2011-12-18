@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall -fwarn-tabs -fno-warn-type-defaults #-}
 module Operand
 where
 
@@ -27,6 +28,7 @@ instance Show Operand where
   show (Reg reg)     = show reg
   show (Rel rel)     = show rel
 
+showMrg :: [RegisterName] -> String
 showMrg []       = ""
 showMrg [r]      = show r
 showMrg (r : rs) = show r ++ "," ++ showMrg rs
