@@ -32,15 +32,13 @@ singleStep []       = return ()
 singleStep (s : ss) = do r <- isRunning
                          if r == False then return () else 
                            do s 
-                              --cpu <- get
-                              --liftIO $ putStrLn $ show cpu
                               singleStep ss
                               return ()
 
 runProgram :: Program -> Pipeline -> Hierarchy -> IO CPU
 runProgram program pipe h = do cpu <- (execStateT (loadProgram program) 
                                        (CPU (emptyMem h) emptyRegs (D False)
-                                        emptyCounters emptyAux)) 
+                                        emptyCounters_ emptyAux)) 
                                cpu' <- execStateT startRunning cpu
                                execStateT (runStep pipe) cpu'
                     
@@ -118,7 +116,7 @@ runStepN p n = do singleStep p
 runProgramN :: Program -> Pipeline -> Hierarchy -> Integer -> IO CPU
 runProgramN program pipe h n = do cpu <- (execStateT (loadProgram program) 
                                           (CPU (emptyMem h) emptyRegs (D False)
-                                           emptyCounters emptyAux)) 
+                                           emptyCounters_ emptyAux)) 
                                   cpu' <- execStateT startRunning cpu
                                   cpu'' <- execStateT (runStepN pipe n) cpu'
                                   -- Need to clear out any remaining memory operations

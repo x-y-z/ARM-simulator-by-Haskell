@@ -50,7 +50,7 @@ class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx
        CCounter cnt cname cval) => 
        CCPU cpu memory reg dbg cnt ch memlayout memdata cache cl cdata addr idx 
        set line tag valid struct datum seg bnd rname rval cname cval
-       |cpu->memory, cpu->reg, cpu->dbg, cpu->cnt, cnt->cpu where
+       |cpu->memory, cpu->reg, cpu->dbg, cpu->cnt where
 -- cpu
        getRegFile_ :: cpu -> reg
        setRegFile_ :: cpu -> reg -> cpu
@@ -149,8 +149,11 @@ class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx
                          else return val
                          
        writeMem :: (MonadState cpu m, MonadIO m) => addr -> datum -> m ()
-       writeMem a d = do updateCache a
-                         setMemWord (align_ a) d
+       writeMem a d = do yesCache <- hasCache
+                         if yesCache 
+                         then do updateCache a
+                                 setMemWord (align_ a) d
+                         else setMemWord (align_ a) d
 -- cache
        hasCache :: (MonadState cpu m, MonadIO m) => m Bool
        hasCache = do cpu <- get
@@ -323,6 +326,106 @@ instance CCPU CPU Memory Registers Debug Counters
                       (InO fd de (x:xs) ew) -> do setAuxilary (InO fd de xs ew)
                                                   return (Just x)
        getStore = do (CPU _ _ _ _ aux) <- get
+                     case aux of
+                       Nil -> fail "Need In-order auxilary data"
+                       (InO _ _ _ []) -> return Nothing
+                       (InO fd de em (x:xs)) -> do setAuxilary (InO fd 
+                                                                    de 
+                                                                    em 
+                                                                    xs)
+                                                   return (Just x)
+
+-- counters
+       stallForN n = do cyc <- currentCycle
+                        setCounter "StallUntil" (cyc + n)
+       stallCycle = getCounter "StallUntil"
+       currentCycle = getCounter "Cycles"
+       nextCycle = do cyc <- getCounter "Cycles"
+                      setCounter "Cycles" (cyc + 1)
+       advanceCycle n = do cyc <- getCounter "Cycles"
+                           setCounter "Cycles" (cyc + n)
+       startRunning = setCounter "Running" 1
+       stopRunning = setCounter "Running" 0
+
+       isRunning = do r <- getCounter "Running"
+                      return $ r == 1
+       instrsExecuted = getCounter "ExecutedInstructions"
+       
+       executedInstr = do is <- getCounter "ExecutedInstructions"
+                          setCounter "ExecutedInstructions" (is + 1)
+
+----------------------------
+-- CPU with no cache
+----------------------------
+data CPUNoCache = CPUNC { memsNC :: MemNoCache,
+                          regNC :: Registers,
+                          dbgNC :: Debug,
+                          cntNC :: Counters,
+                          auxNC :: Auxilary } deriving Show
+
+instance CCPU CPUNoCache MemNoCache Registers Debug Counters 
+         CacheHDummy MemLayout MemData
+         CacheDummy CacheLDummy CacheDDummy Word32 Word32 SetDummy LineDummy Word32 
+         Bool StructDummy Word32 Segment Bound RegisterName Word32 String Integer
+    where
+       getRegFile_ c = regNC c
+       setRegFile_ c r = c {regNC = r}
+       getMem_ c = memsNC c
+       setMem_ c m = c {memsNC = m}
+       getDebug_ c = dbgNC c
+       setDebug_ c d = c {dbgNC = d}
+       getCnt_ c = cntNC c
+       setCnt_ c cn = c {cntNC = cn}
+       getAux_ c = auxNC c         -- ad hoc function
+       setAux_ c a = c {auxNC = a} -- ad hoc function
+-- registers
+       cpsrGet bit = do cpsr <- getReg CPSR
+                        if cpsr `testBit` bit then return 1 else return 0
+       cpsrSet bit = do cpsr <- getReg CPSR
+                        let cpsr' = cpsr `setBit` bit
+                        setReg CPSR cpsr'
+-- cache
+       loadCache addr = undefined
+       updateCache addr = undefined
+-- memory 
+       setBoundM seg bnd = do cpu <- get
+                              let m = memsNC cpu
+                              let b = getMemLayout_ m
+                              let b' = setBound_ b seg 
+                                                 (Bound (fst bnd) (snd bnd))
+                              let m' = setMemLayout_ m b'
+                              put cpu {memsNC = m'}
+
+       getBoundM seg = do cpu <- get
+                          let b = getMemLayout_ $ memsNC cpu
+                          let bnd = getBound_ b seg
+                          return (lowerB bnd, upperB bnd)
+-- auxilary
+       flushPipeline = setAuxilary emptyAux
+--       emptyAux :: Auxilary
+       queueLoad reg addr = do (CPUNC _ _ _ _ aux) <- get
+                               case aux of
+                                 Nil -> fail "Need In-order auxilary data"
+                                 (InO fd de em ew) -> 
+                                   setAuxilary (InO fd 
+                                                    de 
+                                                    (em ++ [(reg,addr)]) 
+                                                    ew)
+       queueStore val addr = do (CPUNC _ _ _ _ aux) <- get
+                                case aux of
+                                  Nil -> fail "Need In-order auxilary data"
+                                  (InO fd de em ew) -> 
+                                    setAuxilary (InO fd 
+                                                     de 
+                                                     em 
+                                                     (ew ++ [(val,addr)]))
+       getLoad = do (CPUNC _ _ _ _ aux) <- get
+                    case aux of
+                      Nil -> fail "Need In-order auxilary data"
+                      (InO _ _ [] _) -> return Nothing
+                      (InO fd de (x:xs) ew) -> do setAuxilary (InO fd de xs ew)
+                                                  return (Just x)
+       getStore = do (CPUNC _ _ _ _ aux) <- get
                      case aux of
                        Nil -> fail "Need In-order auxilary data"
                        (InO _ _ _ []) -> return Nothing
