@@ -98,7 +98,7 @@ dbgProgram program
                           (CPU (emptyMem []) 
                                emptyRegs 
                                (D False) 
-                               emptyCounters 
+                               emptyCounters_ 
                                emptyAux)) 
        cpu' <- execStateT startRunning cpu
        execStateT (dbgStep (Debug [] Hex '?')) cpu'

@@ -16,10 +16,14 @@ module Memory (
                standardCache,cacheTests,prop_address_bits,
                prop_dm_cache_insert,prop_a_cache_insert,
                prop_align_mem_access,
+               ----dummies
+               MemNoCache (cacheNC, layoutNC, memNC), CacheHDummy, CacheDummy, 
+               CacheLDummy, CacheDDummy, StructDummy, SetDummy, LineDummy,
                ----classes
                CMemory
               )
 where
+
 
 -----------------------
 -- system library
@@ -250,6 +254,69 @@ instance CMemory Memory CacheHierarchy MemLayout MemData
          getCacheH_ mem' = cache mem'
          setCacheH_ mem' ch = mem' {cache = ch}
 
+
+------------------------
+-- Dummy
+------------------------
+
+data CacheHDummy
+instance Show CacheHDummy where
+         show _ = "No Cache"
+
+data CacheDummy
+data CacheLDummy
+data CacheDDummy
+data StructDummy
+data SetDummy
+data LineDummy
+
+instance CLine LineDummy Word32 Bool
+
+instance CSet SetDummy LineDummy Word32 Bool where
+         insertInSet_ = undefined
+
+instance CCacheData CacheDDummy Word32 SetDummy LineDummy Word32 Bool where
+         emptyCacheData_ = undefined
+         inCacheData_ = undefined
+         insertInCacheData_ = undefined
+
+instance CCacheLevel CacheLDummy StructDummy Word32 where
+         getOffset_ = undefined
+         getIndex_ = undefined
+         getTag_ = undefined
+         tagBits_ = undefined
+         indexBits_ = undefined
+         offsetBits_ = undefined
+         latency_ = undefined
+         stdL1ACache_ = undefined
+         stdL2Cache_ = undefined
+         stdL1Cache_ = undefined
+
+instance CCache CacheDummy CacheLDummy CacheDDummy Word32 Word32 SetDummy LineDummy
+         Word32 Bool StructDummy where
+         inCache_ = undefined
+         insertInCache_ = undefined
+
+
+instance CCacheHierarchy CacheHDummy CacheDummy CacheLDummy CacheDDummy 
+         Word32 Word32 SetDummy LineDummy Word32 Bool StructDummy where
+         buildHierarchy = undefined
+         buildCache = undefined
+
+data MemNoCache = MemNC { cacheNC :: CacheHDummy,
+                          layoutNC :: MemLayout,
+                          memNC :: MemData} deriving Show
+
+instance CMemory MemNoCache CacheHDummy MemLayout MemData 
+                 CacheDummy CacheLDummy CacheDDummy 
+                 Word32 Word32 SetDummy LineDummy 
+                 Word32 Bool StructDummy Word32 Segment Bound where
+         getMemLayout_ mem' = layoutNC mem'
+         setMemLayout_ mem' lyt = mem' {layoutNC = lyt}
+         getMemData_ memory = memNC memory
+         setMemData_ memory mdata = memory {memNC = mdata}
+         getCacheH_ mem' = cacheNC mem'
+         setCacheH_ mem' ch = mem' {cacheNC = ch}
 
 ------------------------
 -- test
