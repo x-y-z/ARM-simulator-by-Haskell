@@ -17,7 +17,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Bits
 import Data.Word
-
+import Test.HUnit
+import Test.QuickCheck
 
 -------------------
 -- user library
@@ -105,3 +106,22 @@ instance CRegisters Registers RegisterName Word32  where
          cpsrSet_ rs bit = let cpsr = getReg_ rs CPSR
                                cpsr' = cpsr `setBit` bit
                            in setReg_ rs CPSR cpsr'
+
+----------------------
+-- test
+----------------------
+
+
+getNsetReg :: Test
+getNsetReg = TestList [ getReg_ (setReg_ emptyRegs R1 (99::Word32)) R1 ~?= 
+                        (99::Word32)
+                        ]
+
+prop_reg_get_set :: RegisterName -> Word32 -> Property
+prop_reg_get_set r v = property $ (getReg_ (setReg_ emptyRegs r v)) r == v
+
+prop_cpsr_get_set :: Int -> Property
+prop_cpsr_get_set v = property $ (cpsrGet_ (cpsrSet_ emptyRegs v')) v' == 1
+     where v' :: Int
+           v' =  v `mod` 32 
+           
