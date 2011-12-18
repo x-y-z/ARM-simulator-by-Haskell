@@ -25,6 +25,7 @@ singleStep (s : ss) = do r <- isRunning
                          if r == False then return () else 
                            do s 
                               cpu <- get
+                              --liftIO $ putStrLn $ show cpu
                               singleStep ss
                               return ()
 

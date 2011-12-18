@@ -158,7 +158,7 @@ class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx
        setAuxilary :: (MonadState cpu m, MonadIO m) => Auxilary -> m ()
        setAuxilary aux = do c <- get
                             let c' = setAux_ c aux
-                            put c
+                            put c'
        flushPipeline :: (MonadState cpu m, MonadIO m) => m ()
 --       emptyAux :: Auxilary
        queueLoad :: (MonadState cpu m, MonadIO m) => rname -> addr -> m ()
