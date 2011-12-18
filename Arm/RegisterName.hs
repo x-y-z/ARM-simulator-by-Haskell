@@ -7,6 +7,8 @@ where
 import Data.Word
 import Data.Array
 
+import Test.QuickCheck
+
 ----------------------------------------------------------------------
 -- Data type for register names.
 ----------------------------------------------------------------------
@@ -30,6 +32,11 @@ data RegisterName
   | CPSR
   | PC
   deriving (Enum, Eq, Ix, Ord, Read)
+
+-- No arbitrary R15 because it is reserved for use as the program counter
+instance Arbitrary RegisterName where
+  arbitrary = elements [R0,R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,
+                      R11,R12,R13,R14]
 
 instance Show RegisterName where
   show r = show' r

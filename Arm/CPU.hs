@@ -168,18 +168,21 @@ class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx
        flushPipeline :: (MonadState cpu m, MonadIO m) => m ()
 --       emptyAux :: Auxilary
        queueLoad :: (MonadState cpu m, MonadIO m) => rname -> addr -> m ()
-       queueStore :: (MonadState cpu m, MonadIO m) => rname -> addr -> m ()
+       queueStore :: (MonadState cpu m, MonadIO m) => Word32 -> addr -> m ()
        getLoad :: (MonadState cpu m, MonadIO m) => m (Maybe (rname, addr))
-       getStore :: (MonadState cpu m, MonadIO m) => m (Maybe (rname, addr))
+       getStore :: (MonadState cpu m, MonadIO m) => m (Maybe (Word32, addr))
 
 -- counters
        stallForN :: (MonadState cpu m, MonadIO m) => cval -> m ()
        stallCycle :: (MonadState cpu m, MonadIO m) => m cval
        currentCycle :: (MonadState cpu m, MonadIO m) => m cval
        nextCycle :: (MonadState cpu m, MonadIO m) => m ()
+       advanceCycle :: (MonadState cpu m, MonadIO m) => Integer -> m ()
        startRunning :: (MonadState cpu m, MonadIO m) => m ()
        stopRunning :: (MonadState cpu m, MonadIO m) => m ()
        isRunning :: (MonadState cpu m, MonadIO m) => m Bool
+       instrsExecuted :: (MonadState cpu m, MonadIO m) => m cval
+       executedInstr :: (MonadState cpu m, MonadIO m) => m ()
 
 
 -- counters
@@ -195,6 +198,9 @@ class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx
                            let counter' = setCounter_ counter n v
                            let c' = setCnt_ c counter'
                            put c'
+       incrCounter :: (MonadState cpu m, MonadIO m, Num cval) => cname -> m ()
+       incrCounter n = do v <- getCounter n
+                          setCounter n (v + 1)
 -- memory
        setBound :: (MonadState cpu m, MonadIO m) => seg -> bnd -> m ()
        setBound s b = do cpu <- get
@@ -465,7 +471,7 @@ instance CMemory Memory CacheHierarchy MemLayout MemData Cache CacheLevel CacheD
 
 data Auxilary = 
     Nil
-  | InO {fd :: [Word32], de :: [Instruction], em :: [(RegisterName,Address)], ew :: [(RegisterName,Address)]}
+  | InO {fd :: [Word32], de :: [Instruction], em :: [(RegisterName,Address)], ew :: [(Word32,Address)]}
   deriving Show
 
 emptyAux :: Auxilary
@@ -532,11 +538,11 @@ instance CCPU CPU Memory Registers Debug Counters CacheHierarchy MemLayout MemDa
                                  Nil -> fail "Need In-order auxilary data"
                                  (InO fd de em ew) -> 
                                    setAuxilary (InO fd de (em ++ [(reg,addr)]) ew)
-       queueStore reg addr = do (CPU _ _ _ _ aux) <- get
+       queueStore val addr = do (CPU _ _ _ _ aux) <- get
                                 case aux of
                                   Nil -> fail "Need In-order auxilary data"
                                   (InO fd de em ew) -> 
-                                    setAuxilary (InO fd de em (ew ++ [(reg,addr)]))
+                                    setAuxilary (InO fd de em (ew ++ [(val,addr)]))
        getLoad = do (CPU _ _ _ _ aux) <- get
                     case aux of
                       Nil -> fail "Need In-order auxilary data"
@@ -557,12 +563,18 @@ instance CCPU CPU Memory Registers Debug Counters CacheHierarchy MemLayout MemDa
        currentCycle = getCounter "Cycles"
        nextCycle = do cyc <- getCounter "Cycles"
                       setCounter "Cycles" (cyc + 1)
+       advanceCycle n = do cyc <- getCounter "Cycles"
+                           setCounter "Cycles" (cyc + n)
        startRunning = setCounter "Running" 1
        stopRunning = setCounter "Running" 0
 
 --isRunning :: (MonadState CPU m, MonadIO m) => m Bool
        isRunning = do r <- getCounter "Running"
                       return $ r == 1
+       instrsExecuted = getCounter "ExecutedInstructions"
+       
+       executedInstr = do is <- getCounter "ExecutedInstructions"
+                          setCounter "ExecutedInstructions" (is + 1)
 
 
 -- ========test code ====================

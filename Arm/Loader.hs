@@ -29,8 +29,10 @@ loadProgram program = let org    = origin program
           setReg PC org
           codeEnd <- loadInstructions org instrs
           setBoundM CodeS (org, codeEnd)
-          let dataStart = fst (head consts)
-          let dataEnd = fst (last consts)
+          let dataStart = if null consts then (codeEnd + 4) 
+                          else fst (head consts)
+          let dataEnd = if null consts then (codeEnd + 4) 
+                        else fst (last consts)
           loadConstants consts
           setBoundM DataS (dataStart, dataEnd)
           
