@@ -391,7 +391,6 @@ tStr1 :: Assertion
 tStr1 = do cpu <- (execStateT (setReg R1 5) testCPU)
            cpu' <- (execStateT (setReg R2 4) cpu)
            cpu'' <- (execStateT (eval (Str (Reg R1) (Ind R4))) cpu')
-           liftIO $ putStrLn (show cpu'')
            v <- (evalStateT (readMem 0) cpu'')
            assertEqual "Indirect store failed" 5 v
            

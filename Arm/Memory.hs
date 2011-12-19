@@ -226,8 +226,8 @@ instance CCacheData CacheData Word32 Set Line Word32 Bool where
 
 instance CCacheLevel CacheLevel CacheStruct Word32 where
          -- Standard L1 (Direct-mapped), L2 (Associative), and L2 caches
-         stdL1Cache_ = CacheLevel (32768,32,1,10)
-         stdL2Cache_ = CacheLevel (4194304,128,2,100)
+         stdL1Cache_ = CacheLevel (32768,32,1,1)
+         stdL2Cache_ = CacheLevel (4194304,128,2,10)
          stdL1ACache_ = CacheLevel (32768,32,4,16)
          
          latency_ (CacheLevel (_,_,_,l)) = l
@@ -336,7 +336,7 @@ instance CCache CacheDummy CacheLDummy CacheDDummy Word32 Word32 SetDummy LineDu
 instance CCacheHierarchy CacheHDummy CacheDummy CacheLDummy CacheDDummy 
          Word32 Word32 SetDummy LineDummy Word32 Bool StructDummy where
          buildHierarchy = undefined
-         buildCache = undefined
+--         buildCache = undefined
 
 data MemNoCache = MemNC { cacheNC :: CacheHDummy,
                           layoutNC :: MemLayout,

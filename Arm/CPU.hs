@@ -267,7 +267,7 @@ instance CCPU CPU Memory Registers Debug Counters
 -- cache
        loadCache addr = do cpu <- get
                            let c = cache (mems cpu)
-                           return $ foldr f 1000 c
+                           return $ foldr f 100 c
          where f cache@(Cache lev ls) i = if inCache_ cache addr
                                           then min (latency_ lev) i else i
        updateCache addr = do cpu <- get

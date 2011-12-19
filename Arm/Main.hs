@@ -2,6 +2,7 @@
 import Assembler
 import Arm
 import Debugger
+import ExecutionUnit (testEval,prop_eval_eq)
 import Memory (standardCache,cacheTests,
                prop_address_bits,prop_dm_cache_insert,
                prop_a_cache_insert,prop_align_mem_access)
@@ -11,11 +12,12 @@ import Test.HUnit
 import Test.QuickCheck
 
 main :: IO ()
-main = do _ <- runTestTT $ TestList [ cacheTests, test_programs ]
+main = do _ <- runTestTT $ TestList [ cacheTests, test_programs, testEval ]
           quickCheck prop_address_bits
           quickCheck prop_dm_cache_insert
           quickCheck prop_a_cache_insert
           quickCheck prop_align_mem_access
+          quickCheck prop_eval_eq
           quickCheck prop_exec
           return ()
 

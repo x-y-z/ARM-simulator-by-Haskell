@@ -118,8 +118,13 @@ checkProgram prog = do cp1@(CPU (Mem _ _ m1) r1 _ _ _) <-
                          runProgramN prog simplePipe [] 100
                        cp2@(CPU (Mem _ _ m2) r2 _ _ _) <- 
                          runProgramN prog inOrder [] 100
-                       if (m1 == m2 && (Map.insert R15 0 r1) == 
-                           (Map.insert R15 0 r2)) then
+                       fd1 <- (evalStateT (getCounter "DecodeFailures") cp1)
+                       fd2 <- (evalStateT (getCounter "DecodeFailures") cp2)
+                       tm1 <- (evalStateT (getCounter "TooMany") cp1)
+                       tm2 <- (evalStateT (getCounter "TooMany") cp2)
+                       if (tm1 ==1 || tm2 == 1 || fd1 > 10 || fd2 > 10 || 
+                           (m1 == m2 && (Map.insert R15 0 r1) == 
+                           (Map.insert R15 0 r2))) then
                          return True else
                          do liftIO $ putStrLn ((show cp1) ++ "\n\n")
                             liftIO $ putStrLn ((show cp2) ++ "\n\n")
@@ -129,7 +134,11 @@ runStepN :: (MonadState CPU m, MonadIO m) => Pipeline -> Integer -> m ()
 runStepN p n = do singleStep p
                   r   <- isRunning
                   i   <- instrsExecuted
-                  if (r == False) || (i >= n) then return () 
+                  c <- getCounter "Cycles"
+                  if c > 11000 then do setCounter "TooMany" 1 
+                                       return ()
+                    else
+                    if (r == False) || (i >= n) then return () 
                     else (runStepN p n)
 
 runProgramN :: Program -> Pipeline -> Hierarchy -> Integer -> IO CPU
