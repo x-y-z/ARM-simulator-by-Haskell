@@ -21,12 +21,14 @@ import Program
 import RegisterName
 import Stage
 
+-- Divides execution into steps (e.g. one turn for each stage in the pipeline)
 runStep :: (MonadState CPU m, MonadIO m) => Pipeline -> m ()
 runStep p = do singleStep p
                r <- isRunning
                if r == False then return () else (runStep p)
 
 
+-- Runs each stage of the pipeline
 singleStep :: (MonadState CPU m, MonadIO m) => Pipeline -> m ()
 singleStep []       = return ()
 singleStep (s : ss) = do r <- isRunning
@@ -35,6 +37,8 @@ singleStep (s : ss) = do r <- isRunning
                               singleStep ss
                               return ()
 
+-- Loads the program into memory, sets the "Running" counter, 
+-- and starts execution
 runProgram :: Program -> Pipeline -> Hierarchy -> IO CPU
 runProgram program pipe h = do cpu <- (execStateT (loadProgram program) 
                                        (CPU (emptyMem h) emptyRegs (D False)
@@ -42,13 +46,11 @@ runProgram program pipe h = do cpu <- (execStateT (loadProgram program)
                                cpu' <- execStateT startRunning cpu
                                execStateT (runStep pipe) cpu'
                     
-
 run :: Program -> Pipeline -> Hierarchy -> IO ()
 run program pipe h
   = do cpu <- runProgram program pipe h
        putStrLn $ show cpu
        
-
 runFromFile :: String -> Pipeline -> Hierarchy -> IO ()
 runFromFile fileName pipe h
   = do progOrError <- asmFile fileName
@@ -58,6 +60,9 @@ runFromFile fileName pipe h
          Right err
            -> putStrLn err
               
+-- Runs a program file with the in-order pipeline (the one we built) 
+-- and the original (single stage execution) to check that 
+-- the registers and memory are equal after execution
 check :: String -> IO Bool
 check file = do p <- asmFile file
                 case p of
@@ -71,6 +76,15 @@ check file = do p <- asmFile file
                   Right err -> do putStrLn err
                                   return False
                                   
+
+{- 
+The following functions are similar to the above except they
+only execute for N instructions.  These are here to allow us to 
+test our execution model against randomly generated assembly programs.
+Obviously, these random programs will contain infinite loops, so 
+we need to cut off their execution.  However, their outputs (for checking),
+should be the same after the same number of instructions are executed.
+-}
 
 runFromFileN :: String -> Pipeline -> Hierarchy -> IO ()
 runFromFileN fileName pipe h
@@ -89,9 +103,13 @@ runN program pipe h
 checkN :: String -> IO Bool
 checkN file = do p <- asmFile file
                  case p of
-                   Left prog -> do (CPU (Mem _ _ m1) r1 _ _ _) <- runProgramN prog simplePipe [] 100
-                                   (CPU (Mem _ _ m2) r2 _ _ _) <- runProgramN prog inOrder [] 100
-                                   return (m1 == m2 && (Map.insert R15 0 r1) == (Map.insert R15 0 r2))
+                   Left prog -> do (CPU (Mem _ _ m1) r1 _ _ _) <- 
+                                     runProgramN prog simplePipe [] 100
+                                   (CPU (Mem _ _ m2) r2 _ _ _) <- 
+                                     runProgramN prog inOrder [] 100
+                                   return (m1 == m2 && 
+                                           (Map.insert R15 0 r1) == 
+                                           (Map.insert R15 0 r2))
                    Right err -> do putStrLn err
                                    return False
 
@@ -111,7 +129,8 @@ runStepN :: (MonadState CPU m, MonadIO m) => Pipeline -> Integer -> m ()
 runStepN p n = do singleStep p
                   r   <- isRunning
                   i   <- instrsExecuted
-                  if (r == False) || (i >= n) then return () else (runStepN p n)
+                  if (r == False) || (i >= n) then return () 
+                    else (runStepN p n)
 
 runProgramN :: Program -> Pipeline -> Hierarchy -> Integer -> IO CPU
 runProgramN program pipe h n = do cpu <- (execStateT (loadProgram program) 
@@ -119,7 +138,8 @@ runProgramN program pipe h n = do cpu <- (execStateT (loadProgram program)
                                            emptyCounters_ emptyAux)) 
                                   cpu' <- execStateT startRunning cpu
                                   cpu'' <- execStateT (runStepN pipe n) cpu'
-                                  -- Need to clear out any remaining memory operations
+                                  -- Need to clear out any 
+                                  -- remaining memory operations
                                   cpu''' <- execStateT (memWrite) cpu''
                                   execStateT (memRead) cpu'''
                                   
