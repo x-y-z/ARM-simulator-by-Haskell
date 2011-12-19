@@ -118,6 +118,9 @@ checkProgram prog = do cp1@(CPU (Mem _ _ m1) r1 _ _ _) <-
                          runProgramN prog simplePipe [] 100
                        cp2@(CPU (Mem _ _ m2) r2 _ _ _) <- 
                          runProgramN prog inOrder [] 100
+                       -- Check for too many decode failures or too many cycles
+                       -- as conditions that both of the executions likely 
+                       -- would have diverged
                        fd1 <- (evalStateT (getCounter "DecodeFailures") cp1)
                        fd2 <- (evalStateT (getCounter "DecodeFailures") cp2)
                        tm1 <- (evalStateT (getCounter "TooMany") cp1)
@@ -135,6 +138,9 @@ runStepN p n = do singleStep p
                   r   <- isRunning
                   i   <- instrsExecuted
                   c <- getCounter "Cycles"
+                  -- If we execute for over the maximum (should be allowed) 
+                  -- cycles then we need 
+                  -- to stop (stuck in some fetch + unable to decode loop)
                   if c > 11000 then do setCounter "TooMany" 1 
                                        return ()
                     else

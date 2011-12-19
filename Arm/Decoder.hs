@@ -114,6 +114,7 @@ decodeDataTrans word destReg
         instr = case (bit 22, bit 20) of
                   (1, 0) -> Ldr
                   (1, 1) -> Str
+                  _ -> Ldr
         baseReg = nthReg (bits (19, 16))
         offset = bits (11, 0)
         addrMode = (bit 21) * 2 + bit 24
