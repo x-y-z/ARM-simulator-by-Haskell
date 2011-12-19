@@ -1,42 +1,69 @@
 Christian Delozier <delozier>, Zi Yan <yanzi>
 
 *Overview
-  Our project is a modifcation of HARM in Hackage. It is a simple simulator 
-  which can run simplified ARM assembly language. And it supports some basic
-  swi (software interruption), including reading keyboard, writing to screen.
+  Our project is a modifcation of the HARM project from Hackage. It is a simulator 
+  for a simplified subset of the ARM assembly language. It supports some basic
+  swi (software interruption), including command-line input and output.
   
-  The workflow of our program is following: it 1) reads an assembly language
-  file from disk, 2) translates it into internal Program data structure, 
-  3) encode the Program data structure as binary code into Memory component 
-  in the simulator, and 4) runs the loaded program as a real machine by 
-  reading and writing Memory as well as receiving input from the keyboard, 
-  printing output on the screen. 
+  The workflow of our program is as follows: 
+
+    1) Using components from the HARM project, an assembly language file is 
+       read from disk, parsed into an internal program structure, and loaded
+       into memory
+    2) A CPU structure is initialized that includes a main memory, register file,
+       cache structures, and auxilary data structures (pipeline latches)
+    3) The simulator runs a pipeline, comprised of Stages until the program 
+       exits, or exceeds some specified number of cycles or instructions
+    4) The resulting CPU structure is displayed to the user for analysis
   
   Additionally, the program supports a debug mode in which user can run the 
-  program one instruction by another and check the contents of Register and 
-  Memory.
+  program one instruction by another and check the contents of the register file and 
+  main memory.
   
-  In CPU, Register, and Memory modules, you can see the fundamental structure 
-  of our simulator. In Register modules, all operations that read and write 
-  registers are there. In Memory modules, functions there perform the access 
-  in both Cache and MemData. In CPU modules, all the operations in Register 
-  and Memory are gathered as a whole to be invoke and to interplay with each 
-  other. Any effect caused by executing an instruction will be brought into 
+  In the CPU, Register, and Memory modules, you can see the fundamental structure 
+  of our simulator. The Register module includes all operations that read and write 
+  to the register file.  The Memory module contains functions that perform the accesses
+  to both the Cache and main memory.  To simplify the design of the simulator, we only store
+  data tags in the cache instead of the data itself.  This allows us to track cache access 
+  latencies without over-complicating the memory read and write functions.  The structures 
+  and functions contained in the CPU module allow the simulator to interact with all of the
+  components of the CPU, including memory, registers, and auxilary structures such as latches.
+  Any effect caused by executing an instruction will be brought into 
   CPU via writing to Registers or Memory. We also provide an alternate CPU
   prototype without cache to show the extensiblity of our design.
   
-  In ExecutionUnit module, each instruction is interpreted separately and 
-  change the CPU state correspondingly. eval is in charge of single-cycle 
-  program execution, whereas evalIO is in charge of in-order pipeline 
-  execution.
+  The ExecutionUnit module contains instruction evaluation functions that correspond
+  to the two pipelines demonstrated in our project.  The eval function is used for 
+  single-stage pipeline simulation (included with the HARM project), and the evalInO
+  function is used for the in-order pipeline that we developed.  The main difference 
+  between these two evaluation strategies is that evalInO will not immediately process
+  loads and stores but will instead store them in pipeline latches for use by the
+  memRead and memWrite stages of the in-order pipeline.
   
-  In Stage module, we simulate an instruction will be executed in a sequence
-  of Stages, including fetch, decode, execute, memRead, and memWrite. In order
-  to simulate, the Stages are executed in reverse order. And the Auxilary
-  data structure in CPU helps record the changes after each Stage. 
+  The Stage module provides a sample of two pipelines for simulating assembly programs.
+  The first is a single-stage pipeline that was provided by the HARM project.  In this
+  simple pipeline, all instructions are executed in a multiple-cycle manner, going through
+  fetch, decode, execute, memRead, and memWrite in one step.  We developed an in-order
+  pipeline that more closely resembles realistic execution on an ARM core.  Each stage
+  of the in-order pipeline stores its outputs in latches that are contained in the auxilary 
+  structure of the CPU.  We designed the auxilary structure to allow further development 
+  of more advanced pipelines, such as an out-of-order simulation, which would require 
+  extra, or different, auxilary structures.
   
   We reuse the rest of modules from HARM, like Assembler, BinaryNumber, 
   Decoder, Encoder, Format, Instruction, Loader, Operand, ParseLib, Parser,
-  Program, RegisterName, and Swi. Among these, we remove some unnecassary
-  instructions from Assembler and Instruction, and modify Debugger, Loader, 
-  Swi in order to conform to the new State Monad design.
+  Program, RegisterName, and Swi.  We have made some minor modifications to these
+  files in removing complicated instructions that did not fit our simulation 
+  model.  We essentially use these files as additional libraries.  Program, RegisterName,
+  Operand, and Instruction all contain some code for use with QuickCheck.
+
+Order to read files:
+
+  Register.hs
+  Memory.hs
+  CPU.hs
+  ExecutionUnit.hs
+  Stage.hs
+  Program.hs, RegisterName.hs, Operand.hs, Instruction.hs (Only for QuickCheck code)
+  Arm.hs
+  Main.hs
