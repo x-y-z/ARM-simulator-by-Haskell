@@ -9,10 +9,11 @@ import Control.Monad.State
 
 import Test.HUnit
 import Test.QuickCheck
+import Test.QuickCheck.Monadic
 
 import CPU
 import Instruction
-import Memory (emptyMem, Segment (DataS))
+import Memory (Memory (Mem), emptyMem, Segment (DataS))
 import Operand
 import Register (emptyRegs)
 import RegisterName
@@ -605,5 +606,47 @@ evalInO (Swi (Con isn))
      
 evalInO _ = liftIO $ putStrLn "Invalid instruction operand format"
 
+-- evalInO does not write to memory during eval, so we need 
+-- to finish these writes/reads when testing random instructions
+finishMem :: (MonadState CPU m, MonadIO m) => m ()
+finishMem = do st <- getStore
+               ld <- getLoad
+               case (ld,st) of
+                (Just (r,a),Nothing) -> do v <- readMem a
+                                           setReg r v
+                (Nothing,Just (v,a)) -> do writeMem a v
+                (_,_) -> return ()
+
+-- The in-order pipeline must update the PC to 4 less than 
+-- the single-stage pipeline, so we need to fix this for
+-- random testing
+fixPC :: (MonadState CPU m, MonadIO m) => Instruction -> m ()
+fixPC i = if isBranch i then 
+            do v <- getReg R15
+               setReg R15 (v + 4)
+            else return ()
+           
+isBranch :: Instruction -> Bool
+isBranch (B _) = True
+isBranch (Bne _) = True
+isBranch _       = False
+
+checkEvalInstr :: Instruction -> IO Bool
+checkEvalInstr i = do cp <- (execStateT (setReg R15 128) testCPU)
+                      cp1@(CPU (Mem _ _ m1) r1 _ _ _) <- 
+                        (execStateT (eval i) cp)
+                      cpu <- (execStateT (evalInO i) cp)
+                      cpu' <- (execStateT (fixPC i) cpu)
+                      cp2@(CPU (Mem _ _ m2) r2 _ _ _) <-
+                        (execStateT finishMem cpu')
+                      if (m1 == m2 && r1 == r2) then
+                        return True else
+                        do liftIO $ putStrLn ((show cp1) ++ "\n\n")
+                           liftIO $ putStrLn ((show cp2) ++ "\n\n")
+                           return False
+
 prop_eval_eq :: Instruction -> Property
-prop_eval_eq _ = undefined
+prop_eval_eq i = monadicIO $ do b <- Test.QuickCheck.Monadic.run $ 
+                                     checkEvalInstr i
+                                Test.QuickCheck.Monadic.assert $ b
+                                     
