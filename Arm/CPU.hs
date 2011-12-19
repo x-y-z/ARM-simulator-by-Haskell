@@ -24,7 +24,7 @@ import Memory
 import Register
 
 ----------------------------
--- Code
+-- classes
 ----------------------------
 
 class CDebug dbg where
@@ -33,18 +33,14 @@ class CDebug dbg where
       clrDbg_ ::  dbg -> dbg
 
 
-
--- | for each parameter of CPU, we make it a class, providing primitive 
--- operations. For CPU, we will define it as below, bring the definition
--- of monad m at the same time.
-
-
 class CCounter cnt name val|cnt->name, cnt->val where
       getCounter_ :: cnt -> name -> val
       setCounter_ :: cnt -> name -> val -> cnt
       emptyCounters_ :: cnt
 
-
+-- | for each parameter of CPU, we make it a class, providing primitive 
+-- operations. For CPU, we will define it as below, bring the definition
+-- of monad m at the same time.
 class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx 
        set line tag valid struct datum seg bnd, CRegisters reg rname rval,  
        CCounter cnt cname cval) => 
@@ -201,25 +197,21 @@ class (CDebug dbg, CMemory memory ch memlayout memdata cache cl cdata addr idx
                                            " C=" ++ show c ++ 
                                            " V=" ++ show v)
 
-
---  instance of all stuffs
-
-{-data CPU = CPU Memory Registers Debug Counters Auxilary
-     deriving Show-}
-
+-----------------------
+--  instances
+-----------------------
+-- | debug mode indicator
+--   we can add more options in it in the future
 data Debug = D Bool deriving Show
-
-
 
 instance CDebug Debug  where
      isDebug_ (D a) = a 
      setDbg_ (D _) = D True
      clrDbg_ (D _) = D False
 
-
-
+-- | some counters
+--   total cycles, stall cycles
 type Counters = Map String Integer
-
 
 instance CCounter Counters String Integer where
          emptyCounters_ = Map.fromList [("StallUntil", 0),("Cycles", 0)]
@@ -228,10 +220,8 @@ instance CCounter Counters String Integer where
                               else 0
          setCounter_ cnt id val = Map.insert id val cnt
 
--- in CPU class, loadCache and updateCache needed
-
-
-
+-- | auxilary structure
+--   currently it is used as pipeline storage
 data Auxilary = 
     Nil
   | InO {fd :: [Word32], 
@@ -243,7 +233,9 @@ data Auxilary =
 emptyAux :: Auxilary
 emptyAux = InO [] [] [] []
 
-
+-- | our standard cpu setting
+--   it includes memory with cache, registers, debug mode, cycle counters,
+--   and pipeline storage
 data CPU = CPU { mems :: Memory,
                  reg :: Registers,
                  dbg :: Debug,
@@ -357,6 +349,8 @@ instance CCPU CPU Memory Registers Debug Counters
 ----------------------------
 -- CPU with no cache
 ----------------------------
+-- | an alternate CPU implementation
+--   it does not include cache in memory hierarchy
 data CPUNoCache = CPUNC { memsNC :: MemNoCache,
                           regNC :: Registers,
                           dbgNC :: Debug,
@@ -455,46 +449,3 @@ instance CCPU CPUNoCache MemNoCache Registers Debug Counters
                           setCounter "ExecutedInstructions" (is + 1)
 
 
--- ========test code ====================
-testDMCache :: Cache
-testDMCache = (Cache (CacheLevel (32768,32,1,10)) Map.empty)
-
-testACache :: Cache
-testACache = (Cache (CacheLevel (32768,32,4,16)) Map.empty)
-
-prop_dm_cache_insert :: Address -> Property
-prop_dm_cache_insert a = property $ inCache_ (insertInCache_ testDMCache a) a
-
-prop_a_cache_insert :: Address -> Property
-prop_a_cache_insert a = property $ inCache_ (insertInCache_ testACache a) a
-
-
-testCL :: CacheLevel
-testCL = CacheLevel (32768,32,1,10)
-
-cacheTests :: Test
-cacheTests = TestList [ testOffset, testIndex, testTag ]
-
-testOffset :: Test
-testOffset = TestList [ getOffset_ 0x00000001 testCL ~?= 1, 
-                        getOffset_ 0x00000020 testCL ~?= 0 ]
-
-testIndex :: Test
-testIndex = TestList [ getIndex_ 0x00000020 testCL ~?= 1,
-                       getIndex_ 0x0000001F testCL ~?= 0,
-                       getIndex_ 0x00008000 testCL ~?= 0 ]
-            
-testTag :: Test
-testTag = TestList [ getTag_ 0x00008000 testCL ~?= 1 ]
-
--- Check that 
-prop_address_bits :: Address -> Property
-prop_address_bits a = 
-  property $ (shiftL (getTag_ a c) ts) + 
-  (shiftL (getIndex_ a c) is) + getOffset_ a c == a
-  where
-    c = testCL
-    ts = (indexBits_ c) + is
-    is = offsetBits_ c
-
--- ===============test above=========

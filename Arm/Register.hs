@@ -41,6 +41,8 @@ class (Ord name, Show val) => CRegisters reg name val|reg->name, reg->val where
       cpsrGet_ :: reg -> Int -> val
       cpsrSet_ ::reg -> Int -> reg
 
+-- | set Negative, Zero, Carry, oVerflowed bit in 
+--   CPSR (current program status register)
       cpsrGetN_, cpsrGetZ_, cpsrGetC_, cpsrGetV_ :: reg -> val
       cpsrSetN_, cpsrSetZ_, cpsrSetC_, cpsrSetV_:: reg -> reg
       
@@ -94,6 +96,7 @@ emptyRegs = Map.fromList[
   (CPSR,0)
   ]
 
+-- | instance for Registers 
 instance CRegisters Registers RegisterName Word32  where
          emptyRegs_ = Map.fromList[(R0,0), (R1,0), (R2,0),
                                   (R3,0), (R4,0), (R5,0),
@@ -102,7 +105,6 @@ instance CRegisters Registers RegisterName Word32  where
                                   (R12,0),(R13,0),(R14,0),
                                   (R15,0),(CPSR,0)]
          getReg_ rs idx = rs Map.! idx
-
          setReg_ rs idx val = Map.insert idx val rs
          cpsrGet_ rs bitx = if cpsr `testBit` bitx then 1 else 0
            where cpsr = getReg_ rs CPSR
@@ -114,15 +116,17 @@ instance CRegisters Registers RegisterName Word32  where
 -- test
 ----------------------
 
-
+-- | unit test for getReg_ and setReg_
 getNsetReg :: Test
 getNsetReg = TestList [ getReg_ (setReg_ emptyRegs R1 (99::Word32)) R1 ~?= 
                         (99::Word32)
                         ]
 
+-- | quickCheck for getReg_ and setReg_
 prop_reg_get_set :: RegisterName -> Word32 -> Property
 prop_reg_get_set r v = property $ (getReg_ (setReg_ emptyRegs r v)) r == v
 
+-- | quickCheck for CPSR get and set
 prop_cpsr_get_set :: Int -> Property
 prop_cpsr_get_set v = property $ (cpsrGet_ (cpsrSet_ emptyRegs v')) v' == 1
      where v' :: Int
