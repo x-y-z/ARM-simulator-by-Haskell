@@ -126,31 +126,32 @@ eval (Eor (Reg reg1) (Reg reg2) (Reg reg3))
        setReg reg1 (r2 `xor` r3)
               
 eval (Ldr (Reg reg1) op2)
-  = do val <- case op2 of
+  = do (bnd,_) <- getBoundM DataS
+       val <- case op2 of
                 Ind reg2
                   -> do addr <- getReg reg2
-                        l <- loadCache addr
+                        l <- loadCache (addr + bnd)
                         advanceCycle l
-                        readMem addr
+                        readMem (addr + bnd)
                 Bas reg2 offset
                   -> do addr <- getReg reg2
-                        l <- loadCache (addr + offset)
+                        l <- loadCache (addr + bnd + offset)
                         advanceCycle l
-                        readMem (addr + offset)
+                        readMem (addr + bnd + offset)
                 Aut (Bas reg2 offset)
                   -> do addr <- getReg reg2
-                        l <- loadCache (addr + offset)
+                        l <- loadCache (addr + bnd + offset)
                         advanceCycle l
                         -- write the address back into reg2     
-                        setReg reg2 (addr + offset)
-                        readMem (addr + offset)
+                        setReg reg2 (addr + bnd + offset)
+                        readMem (addr + bnd + offset)
                 Pos (Ind reg2) offset
                   -> do addr <- getReg reg2
-                        l <- loadCache (addr + offset)
+                        l <- loadCache (addr + bnd + offset)
                         advanceCycle l
                         -- write addr + offset back into reg2
-                        setReg reg2 (addr + offset)  
-                        readMem addr
+                        setReg reg2 (addr + bnd + offset)  
+                        readMem (addr + bnd)
                 _ -> fail "Invalid operand type for Load"
        setReg reg1 val         
 
@@ -532,21 +533,22 @@ evalInO (Eor (Reg reg1) (Reg reg2) (Reg reg3))
          
 -- load register
 evalInO (Ldr (Reg reg1) op2)
-  = do case op2 of
+  = do (bnd,_) <- getBoundM DataS
+       case op2 of
          Ind reg2
            -> do addr <- getReg reg2
-                 queueLoad reg1 addr
+                 queueLoad reg1 (addr + bnd)
          Bas reg2 offset
            -> do addr <- getReg reg2
-                 queueLoad reg1 (addr + offset)
+                 queueLoad reg1 (addr + bnd + offset)
          Aut (Bas reg2 offset)
            -> do addr <- getReg reg2
-                 setReg reg2 (addr + offset)
-                 queueLoad reg1 (addr + offset)
+                 setReg reg2 (addr + bnd + offset)
+                 queueLoad reg1 (addr + bnd + offset)
          Pos (Ind reg2) offset
            -> do addr <- getReg reg2
-                 setReg reg2 (addr + offset)
-                 queueLoad reg1 addr
+                 setReg reg2 (addr + bnd + offset)
+                 queueLoad reg1 (addr + bnd)
          _ -> fail "Invalid instruction operand format for Load"
        return ()
 

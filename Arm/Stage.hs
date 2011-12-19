@@ -52,7 +52,7 @@ decode = do cyc <- currentCycle
                  case opcode of
                    Nothing -> return ()
                    Just op -> case (Decoder.decode op) of
-                     Nothing -> fail "Unable to decode"
+                     Nothing -> incrCounter "DecodeFailures"
                      Just i -> do setDE i 
               else return ()
 

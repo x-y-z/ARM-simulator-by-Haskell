@@ -101,7 +101,7 @@ swi 11 debug
          else return ()
        stopRunning
 
-swi _ _ = liftIO $ putStrLn ("Unknown Swi code\n")
+swi _ _ = return ()
 
 ----------------------------------------------------------------------
 -- Fetch a string from memory.
