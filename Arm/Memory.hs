@@ -41,27 +41,37 @@ import Test.HUnit
 -- classes
 ---------------------------
 
+-- | Memory data storage 
+--   For a given memory address, a 4-byte data will be provided
 class (Ord addr, Show datum) => CMemData mem addr datum
       |mem->addr, mem->datum, addr->mem, addr->datum where
       emptyMem_ ::mem
+-- | align any memory address to word address
       align_ :: addr -> addr
       getMemWord_ :: mem -> addr -> datum
       setMemWord_ :: mem -> addr -> datum -> mem
       
 
-
+-- | Descriptor of memory layout
+--   The starting address and ending address of code segment, data segment,
+--   stack segment, and heap segment. (stack, heap are left for future use)
 class (Ord seg, Eq seg, Show seg) => CMemLayout lyt seg bnd|lyt->seg, lyt->bnd where
       initMemLayout_ :: lyt
       getBound_ :: lyt -> seg -> bnd
       setBound_ :: lyt -> seg -> bnd -> lyt
 
-
+-- | Cache line 
+--   It consists of a pair of tag and valid bit
 class CLine line tag valid|line->tag, line->valid
       
+-- | Cache set
+--   It consists of several cache lines
 class (CLine line tag valid) => CSet set line tag valid
       |set->line, set->tag, set->valid where
       insertInSet_ :: set -> tag -> set
       
+-- | Cache data storage
+--   Several cache sets make a cache
 class (CSet set line tag valid) => CCacheData cdata idx set line tag valid
       |cdata->set, cdata->line, cdata->tag, cdata->valid, cdata->idx where
 
@@ -69,6 +79,8 @@ class (CSet set line tag valid) => CCacheData cdata idx set line tag valid
       inCacheData_ :: idx -> tag -> cdata -> Bool
       emptyCacheData_ :: cdata
 
+-- | Descriptor of one level of cache
+--   The description includes cache size, block size, set-assocaitivity, access latency
 class CCacheLevel cl struct addr|cl->struct, cl->addr where
       stdL1Cache_ :: cl
       stdL2Cache_ :: cl
@@ -81,6 +93,8 @@ class CCacheLevel cl struct addr|cl->struct, cl->addr where
       getIndex_ :: addr -> cl -> addr
       getOffset_ :: addr -> cl -> addr
 
+-- | One level cache
+--   It includes cache level descriptor, and cache data storage
 class (CCacheData cdata idx set line tag valid, CCacheLevel cl struct addr) =>
        CCache cache cl cdata addr idx set line tag valid struct
        |cache->cl, cache->cdata, cache->idx, cache->set, cache->line, 
@@ -89,11 +103,15 @@ class (CCacheData cdata idx set line tag valid, CCacheLevel cl struct addr) =>
       insertInCache_ :: cache -> addr -> cache
       inCache_ :: cache -> addr -> Bool
 
+-- | Whole cache hierarchy
+--   It consists of several levels of cache
 class (CCache cache cl cdata addr idx set line tag valid struct) => 
       CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct
       | ch->cache, ch->cl where
       buildHierarchy :: [cl] -> ch
---      standardCache :: [cl]
+-- | indicator function
+--   default value is False, once you instantiate it, you should implement it
+--   to return True at any time
       hasCache_ :: ch -> Bool 
       hasCache_ _ = False
 
@@ -114,6 +132,9 @@ class (CCacheHierarchy ch cache cl cdata addr idx set line tag valid struct,
 ------------------------
 -- instances
 ------------------------
+
+-- | standard memory hierarchy
+--   it includes cache, memory layout, and memory data storage
 data Memory = Mem { cache :: CacheHierarchy,
                     layout :: MemLayout,
                     mem :: MemData} deriving Show
@@ -121,8 +142,11 @@ data Memory = Mem { cache :: CacheHierarchy,
 type Address = Word32
 type WordAddress = Address
 
+-- | memory data storage
+--   a map from WordAddress to data (Word32)
 type MemData = Map WordAddress Word32
 
+-- | initial memory hierarchy
 emptyMem :: Hierarchy -> Memory
 emptyMem h = Mem (buildHierarchy h) initMemLayout_ Map.empty
 
@@ -135,11 +159,18 @@ instance CMemData MemData WordAddress Word32 where
                                  else 0
          setMemWord_ mem' addr datum = Map.insert addr datum mem'
 
+-- | memory segment 
+--   code, data, stack, and heap
 data Segment = CodeS | DataS | StackS | HeapS deriving (Ord, Eq, Show)
+
+-- | segment boundary descriptor
 data Bound = Bound {lowerB :: Address, 
                     upperB :: Address} deriving Show
 
+-- | memory layout descriptor
+--   for each segment, a boundary descriptor will give upper bound and lower bound
 type MemLayout = Map Segment Bound
+
 
 instance CMemLayout MemLayout Segment Bound where
          initMemLayout_ = Map.fromList [(CodeS, Bound 0 0),(DataS, Bound 0 0),
@@ -240,6 +271,8 @@ instance CCacheHierarchy CacheHierarchy Cache CacheLevel CacheData
                                  : (buildHierarchy xs)
          hasCache_ _ = True
 
+-- | standard cache setting for our simulator
+--   two level cache
 standardCache :: Hierarchy
 standardCache = [stdL1Cache_, stdL2Cache_]
 
@@ -259,6 +292,7 @@ instance CMemory Memory CacheHierarchy MemLayout MemData
 -- Dummy
 ------------------------
 
+-- | a cache dummy for those who do not like cahce
 data CacheHDummy
 instance Show CacheHDummy where
          show _ = "No Cache"
@@ -297,11 +331,12 @@ instance CCache CacheDummy CacheLDummy CacheDDummy Word32 Word32 SetDummy LineDu
          inCache_ = undefined
          insertInCache_ = undefined
 
-
+-- | because it does not make hasCache to return True
+--   in CPU, no cache operation will be triggered
 instance CCacheHierarchy CacheHDummy CacheDummy CacheLDummy CacheDDummy 
          Word32 Word32 SetDummy LineDummy Word32 Bool StructDummy where
          buildHierarchy = undefined
---         buildCache = undefined
+         buildCache = undefined
 
 data MemNoCache = MemNC { cacheNC :: CacheHDummy,
                           layoutNC :: MemLayout,
@@ -335,6 +370,7 @@ testDMCache = (Cache testCL emptyCacheData_)
 testACache :: Cache
 testACache = (Cache testCLA emptyCacheData_)
 
+-- | put the data into cache, check whether it is there
 prop_dm_cache_insert :: Address -> Property
 prop_dm_cache_insert a = property $ inCache_ (insertInCache_ testDMCache a) a
 
@@ -344,19 +380,22 @@ prop_a_cache_insert a = property $ inCache_ (insertInCache_ testACache a) a
 cacheTests :: Test
 cacheTests = TestList [ testOffset, testIndex, testTag ]
 
+-- | check getOffset_ function
 testOffset :: Test
 testOffset = TestList [ getOffset_ 0x00000001 testCL ~?= 1, 
                         getOffset_ 0x00000020 testCL ~?= 0 ]
-
+-- | check getIndex_ function
 testIndex :: Test
 testIndex = TestList [ getIndex_ 0x00000020 testCL ~?= 1,
                        getIndex_ 0x0000001F testCL ~?= 0,
                        getIndex_ 0x00008000 testCL ~?= 0 ]
             
+-- | check getTag_ function
 testTag :: Test
 testTag = TestList [ getTag_ 0x00008000 testCL ~?= 1 ]
 
--- Check that the split address sums to the original address
+
+-- | Check that the split address sums to the original address
 prop_address_bits :: Address -> Property
 prop_address_bits a = 
   property $ (shiftL (getTag_ a c) ts) + 
@@ -366,7 +405,7 @@ prop_address_bits a =
     ts = (indexBits_ c) + is
     is = offsetBits_ c
 
-
+-- | put a datum into memory, pull it out, two value should be the same
 prop_align_mem_access :: Address -> Word32 -> Property
 prop_align_mem_access a d =
      property $ (getMemWord_ (setMemWord_ emptyMem_ a' d) a') == d

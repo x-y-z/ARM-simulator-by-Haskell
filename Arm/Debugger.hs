@@ -10,7 +10,9 @@
 -- MAINTAINER:        Alex Mason
 -- EMAIL:             axman6@gmail.com
 ----------------------------------------------------------------------
-
+-- modified by Zi Yan 12/2011
+-- uses monadstate and monadio instead
+----------------------------------------------------------------------
 {-#OPTIONS -XFlexibleContexts #-}
 
 module Debugger (debug)
@@ -45,7 +47,8 @@ import RegisterName
 import Arm hiding (singleStep)
 import Stage
 
-
+-- | auxilary loop function
+--   keep executing "m a" until "m Bool" gives False 
 whileM :: Monad m => m Bool -> m a -> m [a]
 whileM  p f = do
         x <- p
@@ -97,7 +100,7 @@ dbgProgram program
   = do cpu <- (execStateT (loadProgram program) 
                           (CPU (emptyMem []) 
                                emptyRegs 
-                               (D False) 
+                               (D True) 
                                emptyCounters_ 
                                emptyAux)) 
        cpu' <- execStateT startRunning cpu
