@@ -301,7 +301,7 @@ instance CCache CacheDummy CacheLDummy CacheDDummy Word32 Word32 SetDummy LineDu
 instance CCacheHierarchy CacheHDummy CacheDummy CacheLDummy CacheDDummy 
          Word32 Word32 SetDummy LineDummy Word32 Bool StructDummy where
          buildHierarchy = undefined
-         buildCache = undefined
+--         buildCache = undefined
 
 data MemNoCache = MemNC { cacheNC :: CacheHDummy,
                           layoutNC :: MemLayout,
