@@ -1,4 +1,4 @@
-Christian Delozier <delozier>, Zi Yan <yanzi>
+Christian Delozier , Zi Yan 
 
 *Overview
   Our project is a modifcation of the HARM project from Hackage. It is a simulator 
@@ -67,3 +67,5 @@ Order to read files:
   Program.hs, RegisterName.hs, Operand.hs, Instruction.hs (Only for QuickCheck code)
   Arm.hs
   Main.hs
+
+The HARM project: http://hackage.haskell.org/package/HARM
